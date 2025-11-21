@@ -15,29 +15,29 @@ class TrickEngine(
     private val _currentSensorData = MutableStateFlow<SensorData?>(null)
     val currentSensorData: StateFlow<SensorData?> = _currentSensorData.asStateFlow()
 
+    private val maxHistorySize = 600 // 10 seconds at ~60Hz
+    private val ringBuffer = RingBuffer<SensorData>(maxHistorySize)
+
     private val _sensorHistory = MutableStateFlow<List<SensorData>>(emptyList())
     val sensorHistory: StateFlow<List<SensorData>> = _sensorHistory.asStateFlow()
 
-    private val maxHistorySize = 600 // 10 seconds at ~60Hz
-
-    private val _isRecording = MutableStateFlow(false)
+    private val _isRecording = MutableStateFlow(true) // Auto-start recording
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
 
     init {
+        // Start listening immediately
+        sensorManager.startListening()
+
         scope.launch {
             sensorManager.sensorDataFlow.collect { data ->
                 _currentSensorData.value = data
 
                 if (_isRecording.value) {
-                    val currentHistory = _sensorHistory.value.toMutableList()
-                    currentHistory.add(data)
+                    // Add to ring buffer (automatically handles overflow)
+                    ringBuffer.add(data)
 
-                    // Keep only the most recent data up to maxHistorySize
-                    if (currentHistory.size > maxHistorySize) {
-                        currentHistory.removeAt(0)
-                    }
-
-                    _sensorHistory.value = currentHistory
+                    // Update the state flow with the current buffer contents
+                    _sensorHistory.value = ringBuffer.toList()
                 }
             }
         }
@@ -54,6 +54,7 @@ class TrickEngine(
     }
 
     fun clearHistory() {
+        ringBuffer.clear()
         _sensorHistory.value = emptyList()
     }
 }
