@@ -11,11 +11,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import ocd.phonetricks.ui.components.AxisVisualization
 import ocd.phonetricks.ui.components.SensorGraph
+import ocd.phonetricks.ui.components.TrickTimeline
 
 @Composable
 fun SensorScreen(viewModel: SensorViewModel) {
     val sensorData by viewModel.sensorData.collectAsState()
     val sensorHistory by viewModel.sensorHistory.collectAsState()
+    val detectedTricks by viewModel.detectedTricks.collectAsState()
     val isRecording by viewModel.isRecording.collectAsState()
 
     val scrollState = rememberScrollState()
@@ -84,6 +86,16 @@ fun SensorScreen(viewModel: SensorViewModel) {
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Trick Timeline - Show at the top with current time for scrolling!
+                sensorData?.let { data ->
+                    TrickTimeline(
+                        tricks = detectedTricks,
+                        currentTime = data.timestamp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
                 // Core Sensors Section
                 Text(
                     text = "Core Sensors",

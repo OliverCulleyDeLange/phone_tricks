@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import ocd.phonetricks.data.SensorData
+import ocd.phonetricks.data.TrickEvent
 import ocd.phonetricks.sensor.SensorManager
 
 class TrickEngine(
@@ -24,6 +25,13 @@ class TrickEngine(
     private val _isRecording = MutableStateFlow(true) // Auto-start recording
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
 
+    // Trick detection
+    private val trickDetector = TrickDetector()
+    private var previousSensorData: SensorData? = null
+
+    private val _detectedTricks = MutableStateFlow<List<TrickEvent>>(emptyList())
+    val detectedTricks: StateFlow<List<TrickEvent>> = _detectedTricks.asStateFlow()
+
     init {
         // Start listening immediately
         sensorManager.startListening()
@@ -38,6 +46,14 @@ class TrickEngine(
 
                     // Update the state flow with the current buffer contents
                     _sensorHistory.value = ringBuffer.toList()
+
+                    // Detect tricks
+                    val newTricks = trickDetector.processSensorData(data, previousSensorData)
+                    if (newTricks.isNotEmpty()) {
+                        _detectedTricks.value = _detectedTricks.value + newTricks
+                    }
+
+                    previousSensorData = data
                 }
             }
         }
@@ -56,5 +72,8 @@ class TrickEngine(
     fun clearHistory() {
         ringBuffer.clear()
         _sensorHistory.value = emptyList()
+        _detectedTricks.value = emptyList()
+        trickDetector.reset()
+        previousSensorData = null
     }
 }
