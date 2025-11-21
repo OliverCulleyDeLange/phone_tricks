@@ -92,6 +92,7 @@ fun SensorScreen(viewModel: SensorViewModel) {
             ) {
                 PhoneReplayView(
                     sensorHistory = sensorHistory,
+                    playbackIndexFlow = viewModel.playbackIndexFlow,
                     onReplayComplete = {
                         viewModel.stopReplay()
                     }

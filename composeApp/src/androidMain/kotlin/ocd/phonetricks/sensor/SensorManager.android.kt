@@ -8,6 +8,8 @@ import android.hardware.SensorManager as AndroidSensorManager
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import ocd.phonetricks.data.Accelerometer
 import ocd.phonetricks.data.Gravity
 import ocd.phonetricks.data.Gyroscope
@@ -91,17 +93,7 @@ class AndroidSensorManager(context: Context) : SensorManager {
                         }
                     }
 
-                    trySend(
-                        SensorData(
-                            timestamp = System.currentTimeMillis(),
-                            accelerometer = lastAccelerometer,
-                            gyroscope = lastGyroscope,
-                            magnetometer = lastMagnetometer,
-                            rotationVector = lastRotationVector,
-                            linearAcceleration = lastLinearAcceleration,
-                            gravity = lastGravity
-                        )
-                    )
+                    // Update latest sensor values; emissions are throttled by the emitter coroutine below
                 }
             }
 
@@ -137,7 +129,31 @@ class AndroidSensorManager(context: Context) : SensorManager {
             androidSensorManager.registerListener(listener, it, delay)
         }
 
+        // Launch a coroutine that emits the latest aggregated SensorData at ~60Hz
+        val emitJob = launch {
+            while (isActive) {
+                try {
+                    kotlinx.coroutines.delay(16L) // ~60Hz
+                } catch (e: Throwable) {
+                    break
+                }
+
+                trySend(
+                    SensorData(
+                        timestamp = System.currentTimeMillis(),
+                        accelerometer = lastAccelerometer,
+                        gyroscope = lastGyroscope,
+                        magnetometer = lastMagnetometer,
+                        rotationVector = lastRotationVector,
+                        linearAcceleration = lastLinearAcceleration,
+                        gravity = lastGravity
+                    )
+                )
+            }
+        }
+
         awaitClose {
+            emitJob.cancel()
             androidSensorManager.unregisterListener(listener)
         }
     }

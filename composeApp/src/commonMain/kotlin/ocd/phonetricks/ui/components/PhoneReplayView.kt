@@ -18,6 +18,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import ocd.phonetricks.data.SensorData
 import kotlin.math.atan2
 import kotlin.math.sqrt
@@ -25,27 +26,31 @@ import kotlin.math.sqrt
 @Composable
 fun PhoneReplayView(
     sensorHistory: List<SensorData>,
+    /**
+     * Flow that emits the current index into `sensorHistory` (0-based).
+     * The ViewModel should emit at the desired playback rate (e.g. 60Hz).
+     */
+    playbackIndexFlow: Flow<Int>,
     onReplayComplete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var currentIndex by remember { mutableStateOf(0) }
-    var isPlaying by remember { mutableStateOf(true) }
+    // Collect playback index from ViewModel-provided flow
+    val currentIndex by playbackIndexFlow.collectAsState(initial = 0)
+    var completionNotified by remember { mutableStateOf(false) }
 
-    // Play through the data at 2x speed
-    LaunchedEffect(isPlaying) {
-        if (isPlaying && sensorHistory.isNotEmpty()) {
-            while (currentIndex < sensorHistory.size) {
-                delay(8L) // ~120Hz playback (60Hz * 2 for double speed)
-                currentIndex++
-            }
-            onReplayComplete()
-        }
-    }
-
-    val currentData = if (currentIndex < sensorHistory.size) {
+    val currentData = if (sensorHistory.isNotEmpty() && currentIndex in sensorHistory.indices) {
         sensorHistory[currentIndex]
     } else {
         sensorHistory.lastOrNull()
+    }
+
+    // Notify completion once when the flow reaches the end of the history
+    val isFinished = sensorHistory.isEmpty() || currentIndex >= (sensorHistory.size - 1)
+    LaunchedEffect(isFinished, completionNotified) {
+        if (isFinished && !completionNotified) {
+            completionNotified = true
+            onReplayComplete()
+        }
     }
 
     Card(
@@ -64,7 +69,7 @@ fun PhoneReplayView(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Replay (2x Speed)",
+                    text = "Replay",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -104,22 +109,15 @@ fun PhoneReplayView(
             // Control button
             Button(
                 onClick = {
-                    if (currentIndex >= sensorHistory.size) {
-                        // Restart
-                        currentIndex = 0
-                        isPlaying = true
-                    } else {
-                        // Toggle pause/play
-                        isPlaying = !isPlaying
-                    }
+                    // Playback is controlled by the ViewModel flow. When finished, user can request a replay
+                    if (isFinished) onReplayComplete()
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
                     when {
-                        currentIndex >= sensorHistory.size -> "Replay Again"
-                        isPlaying -> "Pause"
-                        else -> "Resume"
+                        isFinished -> "Replay Again"
+                        else -> "Playing"
                     }
                 )
             }
