@@ -10,6 +10,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import ocd.phonetricks.ui.components.AxisVisualization
+import ocd.phonetricks.ui.components.PhoneAnimation
+import ocd.phonetricks.ui.components.PhoneReplayView
 import ocd.phonetricks.ui.components.SensorGraph
 import ocd.phonetricks.ui.components.TrickTimeline
 
@@ -19,6 +21,7 @@ fun SensorScreen(viewModel: SensorViewModel) {
     val sensorHistory by viewModel.sensorHistory.collectAsState()
     val detectedTricks by viewModel.detectedTricks.collectAsState()
     val isRecording by viewModel.isRecording.collectAsState()
+    val isReplaying by viewModel.isReplaying.collectAsState()
 
     val scrollState = rememberScrollState()
 
@@ -43,7 +46,7 @@ fun SensorScreen(viewModel: SensorViewModel) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                // Recording status indicator
+                // Recording status indicator and Replay button
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -57,28 +60,45 @@ fun SensorScreen(viewModel: SensorViewModel) {
                     }
                     Button(
                         onClick = {
-                            if (isRecording) {
-                                viewModel.stopRecording()
+                            if (isReplaying) {
+                                viewModel.stopReplay()
                             } else {
-                                viewModel.startRecording()
+                                viewModel.startReplay()
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isRecording)
-                                MaterialTheme.colorScheme.error
+                            containerColor = if (isReplaying)
+                                MaterialTheme.colorScheme.tertiary
                             else
                                 MaterialTheme.colorScheme.primary
                         ),
-                        modifier = Modifier.height(36.dp)
+                        modifier = Modifier.height(36.dp),
+                        enabled = sensorHistory.isNotEmpty()
                     ) {
-                        Text(if (isRecording) "Pause" else "Resume")
+                        Text(if (isReplaying) "Stop Replay" else "⟳ Replay")
                     }
                 }
             }
         }
 
-        // Scrollable content
-        if (sensorData != null) {
+        // Content - either replay view or sensor graphs
+        if (isReplaying) {
+            // Show replay animation
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(16.dp)
+            ) {
+                PhoneReplayView(
+                    sensorHistory = sensorHistory,
+                    onReplayComplete = {
+                        viewModel.stopReplay()
+                    }
+                )
+            }
+        } else if (sensorData != null) {
+            // Show normal sensor visualization
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -92,6 +112,37 @@ fun SensorScreen(viewModel: SensorViewModel) {
                         tricks = detectedTricks,
                         currentTime = data.timestamp
                     )
+                }
+
+                // Live Animated Phone - right after timeline!
+                sensorData?.let { data ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Text(
+                                text = "Live Phone Motion",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            PhoneAnimation(
+                                accelerometer = data.accelerometer,
+                                gyroscope = data.gyroscope,
+                                rotationVector = data.rotationVector,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(400.dp)
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -182,15 +233,15 @@ fun SensorScreen(viewModel: SensorViewModel) {
                     }
                 }
 
-                // 3D Visualization Section
+                // 3D Axis Visualization Section
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Real-Time Visualization",
+                    text = "3D Axes Visualization",
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.primary
                 )
 
-                // 3D Axis Visualization - uses real-time data
+                // 3D Axis Visualization - legacy view
                 sensorData?.let { data ->
                     AxisVisualization(
                         accelX = data.accelerometer.x,
