@@ -24,6 +24,24 @@ data class TrainingSample(
 )
 
 /**
+ * Represents a single labeled training sample with sensor data, tap timestamps, and its label.
+ */
+@Serializable
+data class LabeledTrainingSample(
+    val label: String,
+    val tapTimestamps: List<Long>,
+    val accelerometerData: List<Accelerometer>,
+    val gyroscopeData: List<Gyroscope>,
+    val magnetometerData: List<Magnetometer>,
+    val rotationVectorData: List<RotationVector>,
+    val linearAccelerationData: List<LinearAcceleration>,
+    val gravityData: List<Gravity>,
+    val recordingTimestampMs: Long,
+    val recordingDurationMs: Long,
+    val sampleRate: String = ""
+)
+
+/**
  * Handles recording and serialization of sensor data for training ML models.
  */
 class TrainingDataRecorder {
@@ -84,6 +102,33 @@ class TrainingDataRecorder {
             linearAccelerationData = linearAccelerationBuffer.toList(),
             gravityData = gravityBuffer.toList(),
             recordingTimestampMs = currentTimeMillis()
+        )
+        return json.encodeToString(sample)
+    }
+
+    fun serializeWithTimestamps(
+        accelerometerBuffer: RingBuffer<Accelerometer>,
+        gyroscopeBuffer: RingBuffer<Gyroscope>,
+        magnetometerBuffer: RingBuffer<Magnetometer>,
+        rotationVectorBuffer: RingBuffer<RotationVector>,
+        linearAccelerationBuffer: RingBuffer<LinearAcceleration>,
+        gravityBuffer: RingBuffer<Gravity>,
+        label: String,
+        tapTimestamps: List<Long>,
+        recordingStartMs: Long,
+        recordingEndMs: Long
+    ): String {
+        val sample = LabeledTrainingSample(
+            label = label,
+            tapTimestamps = tapTimestamps,
+            accelerometerData = accelerometerBuffer.toList(),
+            gyroscopeData = gyroscopeBuffer.toList(),
+            magnetometerData = magnetometerBuffer.toList(),
+            rotationVectorData = rotationVectorBuffer.toList(),
+            linearAccelerationData = linearAccelerationBuffer.toList(),
+            gravityData = gravityBuffer.toList(),
+            recordingTimestampMs = recordingStartMs,
+            recordingDurationMs = recordingEndMs - recordingStartMs
         )
         return json.encodeToString(sample)
     }

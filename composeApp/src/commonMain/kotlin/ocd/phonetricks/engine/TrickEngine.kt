@@ -75,6 +75,26 @@ class TrickEngine(
         )
     }
 
+    fun exportTrainingDataWithTimestamps(
+        label: String,
+        tapTimestamps: List<Long>,
+        recordingStartMs: Long,
+        recordingEndMs: Long
+    ): String {
+        return trainingRecorder.serializeWithTimestamps(
+            accelerometerBuffer,
+            gyroscopeBuffer,
+            magnetometerBuffer,
+            rotationVectorBuffer,
+            linearAccelerationBuffer,
+            gravityBuffer,
+            label,
+            tapTimestamps,
+            recordingStartMs,
+            recordingEndMs
+        )
+    }
+
     fun getBufferStats() = trainingRecorder.getBufferStats(
         accelerometerBuffer,
         gyroscopeBuffer,
