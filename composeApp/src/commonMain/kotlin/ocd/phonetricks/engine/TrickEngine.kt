@@ -1,8 +1,11 @@
 package ocd.phonetricks.engine
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import ocd.phonetricks.data.SensorData
@@ -29,8 +32,9 @@ class TrickEngine(
     private val trickDetector = TrickDetector()
     private val tapDetector = TapDetector()
 
-    private val _detectedTricks = MutableStateFlow<List<TrickEvent>>(emptyList())
-    val detectedTricks: StateFlow<List<TrickEvent>> = _detectedTricks.asStateFlow()
+    // Emit trick events as they are detected instead of accumulating in a list
+    private val _trickEvents = MutableSharedFlow<TrickEvent>()
+    val trickEvents: SharedFlow<TrickEvent> = _trickEvents.asSharedFlow()
 
     init {
         // Start listening immediately
@@ -53,10 +57,10 @@ class TrickEngine(
                     // Detect taps - pass the ring buffer to detectors
                     val newTaps = tapDetector.processSensorData(ringBuffer)
 
-                    // Combine and add all detected events
+                    // Combine and emit all detected events
                     val allEvents = newTricks + newTaps
-                    if (allEvents.isNotEmpty()) {
-                        _detectedTricks.value = _detectedTricks.value + allEvents
+                    for (event in allEvents) {
+                        _trickEvents.emit(event)
                     }
                 }
             }
@@ -76,7 +80,6 @@ class TrickEngine(
     fun clearHistory() {
         ringBuffer.clear()
         _sensorHistory.value = emptyList()
-        _detectedTricks.value = emptyList()
         trickDetector.reset()
         tapDetector.reset()
     }

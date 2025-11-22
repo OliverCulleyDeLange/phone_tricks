@@ -11,15 +11,18 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import ocd.phonetricks.audio.createAudioManager
 import ocd.phonetricks.data.SensorData
 import ocd.phonetricks.data.TrickEvent
 import ocd.phonetricks.data.RotationVector
+import ocd.phonetricks.data.isTap
 import ocd.phonetricks.engine.TrickEngine
 import ocd.phonetricks.sensor.SensorManager
 import kotlin.math.sqrt
 
 class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
     private val engine = TrickEngine(sensorManager, viewModelScope)
+    private val audioManager = createAudioManager()
 
     // Tare quaternion - stores the offset rotation to align the model with the device
     private val _tareQuaternion = MutableStateFlow<RotationVector?>(null)
@@ -41,8 +44,9 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, engine.sensorHistory.value)
 
-    // Detected tricks
-    val detectedTricks: StateFlow<List<TrickEvent>> = engine.detectedTricks
+    // Detected tricks - accumulated for UI display
+    private val _detectedTricks = MutableStateFlow<List<TrickEvent>>(emptyList())
+    val detectedTricks: StateFlow<List<TrickEvent>> = _detectedTricks.asStateFlow()
 
     val isRecording: StateFlow<Boolean> = engine.isRecording
 
@@ -91,6 +95,7 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
 
     fun clearHistory() {
         engine.clearHistory()
+        _detectedTricks.value = emptyList()
     }
 
     fun tare() {
@@ -151,7 +156,25 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
         }
     }
 
+    override fun onCleared() {
+        super.onCleared()
+        audioManager.release()
+    }
+
     init {
+        // Listen to trick events and play sounds for taps
+        viewModelScope.launch {
+            engine.trickEvents.collect { event ->
+                // Add to accumulated list for UI
+                _detectedTricks.value = _detectedTricks.value + event
+
+                // Play sound if it's a tap
+                if (event.type.isTap()) {
+                    audioManager.playTapSound()
+                }
+            }
+        }
+
         // Start a coroutine to drive playback indices when replaying
         viewModelScope.launch {
             _isReplaying.collect { replaying ->
