@@ -64,7 +64,9 @@ class MLTapDetector {
 
                         val (predictedLabel, confidence) = model!!.predict(features)
 
-                        if (confidence >= mlConfidenceThreshold) {
+                        if (predictedLabel == "NEGATIVE") {
+                            println("ML rejected as false positive (NEGATIVE)")
+                        } else if (confidence >= mlConfidenceThreshold) {
                             val tapType = mapPredictionToTrickType(
                                 predictedLabel,
                                 rotationVectorBuffer,

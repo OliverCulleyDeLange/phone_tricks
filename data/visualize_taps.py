@@ -8,8 +8,24 @@ def load_training_data(json_file):
     with open(json_file, 'r') as f:
         return json.load(f)
 
+
+def get_label_from_data(data):
+    if 'labels' in data and isinstance(data['labels'], dict):
+        labels_obj = data['labels']
+        label_parts = []
+        if labels_obj.get('sessionTag'):
+            label_parts.append(labels_obj['sessionTag'])
+        if labels_obj.get('surface'):
+            label_parts.extend(labels_obj['surface'])
+        if labels_obj.get('taps'):
+            label_parts.extend(labels_obj['taps'])
+        return '_'.join(label_parts) if label_parts else 'unlabeled'
+    else:
+        return data.get('label', 'unlabeled')
+
+
 def plot_sensor_data(data, output_file=None):
-    label = data['label']
+    label = get_label_from_data(data)
     tap_timestamps = data['tapTimestamps']
     accel_data = data['accelerometerData']
     gyro_data = data['gyroscopeData']
@@ -216,8 +232,8 @@ def batch_process():
             data = load_training_data(json_file)
             
             output_file = visualizations_dir / f"{json_file.stem}.png"
-            
-            print(f"  Label: {data['label']}")
+
+            print(f"  Label: {get_label_from_data(data)}")
             print(f"  Taps: {len(data['tapTimestamps'])}")
             print(f"  Accelerometer samples: {len(data['accelerometerData'])}")
             print(f"  Gyroscope samples: {len(data['gyroscopeData'])}")
@@ -242,8 +258,8 @@ def process_single_file(json_file, output_file=None):
     
     print(f"Loading data from {json_file}...")
     data = load_training_data(json_file)
-    
-    print(f"Label: {data['label']}")
+
+    print(f"Label: {get_label_from_data(data)}")
     print(f"Number of taps: {len(data['tapTimestamps'])}")
     print(f"Accelerometer samples: {len(data['accelerometerData'])}")
     print(f"Gyroscope samples: {len(data['gyroscopeData'])}")

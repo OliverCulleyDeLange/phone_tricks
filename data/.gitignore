@@ -1,10 +1,8 @@
 *.png
 *.jpg
 *.jpeg
-!example_visualization.png
-!visualizations/*.png
+visualizations/*.png
 
-training_data/*.json
 
 __pycache__/
 *.pyc

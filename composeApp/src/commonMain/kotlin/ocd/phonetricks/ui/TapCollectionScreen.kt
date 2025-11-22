@@ -193,7 +193,6 @@ fun TapCollectionScreen(viewModel: TapCollectionViewModel) {
                 )
 
                 if (isRecording) {
-                    val secondsRemaining = (timeRemainingMs / 100.0) / 10.0
                     val seconds = (timeRemainingMs / 1000).toInt()
                     val tenths = ((timeRemainingMs % 1000) / 100).toInt()
                     Text(
