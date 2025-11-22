@@ -136,6 +136,7 @@ fun SensorScreen(viewModel: SensorViewModel) {
 
                             PhoneAnimation(
                                 rotationVector = data.rotationVector,
+                                onTareRequest = { viewModel.tare() },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(400.dp)

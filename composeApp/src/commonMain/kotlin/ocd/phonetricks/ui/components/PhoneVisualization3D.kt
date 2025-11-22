@@ -12,5 +12,6 @@ import ocd.phonetricks.data.RotationVector
 @Composable
 expect fun PhoneVisualization3D(
     rotationVector: RotationVector,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onTareRequest: (() -> Unit)? = null
 )

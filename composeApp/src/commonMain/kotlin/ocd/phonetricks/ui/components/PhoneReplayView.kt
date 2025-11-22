@@ -127,12 +127,14 @@ fun PhoneReplayView(
 @Composable
 fun PhoneAnimation(
     rotationVector: ocd.phonetricks.data.RotationVector,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onTareRequest: (() -> Unit)? = null
 ) {
     // Use SceneView 3D visualization on Android
     PhoneVisualization3D(
         rotationVector = rotationVector,
-        modifier = modifier
+        modifier = modifier,
+        onTareRequest = onTareRequest
     )
 }
 

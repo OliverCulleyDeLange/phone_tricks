@@ -4,7 +4,11 @@ import android.R.attr.x
 import android.R.attr.y
 import android.util.Log.w
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,7 +30,8 @@ import dev.romainguy.kotlin.math.Quaternion
 @Composable
 actual fun PhoneVisualization3D(
     rotationVector: RotationVector,
-    modifier: Modifier
+    modifier: Modifier,
+    onTareRequest: (() -> Unit)?
 ) {
     val engine = rememberEngine()
     val modelLoader = rememberModelLoader(engine)
@@ -36,6 +41,9 @@ actual fun PhoneVisualization3D(
     val y = rotationVector.y
     val z = rotationVector.z
     val w = (rotationVector.scalar ?: computeScalar(x.toDouble(), y.toDouble(), z.toDouble()))
+
+    // Create the rotation quaternion from sensor data (tare already applied in ViewModel)
+    val sensorQuat = Quaternion(x = x, y = y, z = z, w = w)
 
     val parentNode = remember { Node(engine = engine) }
     var phoneNode by remember { mutableStateOf<ModelNode?>(null) }
@@ -61,8 +69,8 @@ actual fun PhoneVisualization3D(
         }
     }
 
-    LaunchedEffect(x, y, z, w) {
-        parentNode.quaternion = Quaternion(x = x, y = y, z = z, w = w)
+    LaunchedEffect(sensorQuat) {
+        parentNode.quaternion = sensorQuat
     }
 
     Box(modifier = modifier) {
@@ -96,6 +104,17 @@ actual fun PhoneVisualization3D(
                         add(parentNode)
                     }
                 )
+
+                if (onTareRequest != null) {
+                    Button(
+                        onClick = onTareRequest,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(16.dp)
+                    ) {
+                        Icon(Icons.Filled.Refresh, "Tare")
+                    }
+                }
             }
         }
     }

@@ -6,20 +6,40 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ocd.phonetricks.data.SensorData
 import ocd.phonetricks.data.TrickEvent
+import ocd.phonetricks.data.RotationVector
 import ocd.phonetricks.engine.TrickEngine
 import ocd.phonetricks.sensor.SensorManager
+import kotlin.math.sqrt
 
 class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
     private val engine = TrickEngine(sensorManager, viewModelScope)
 
-    // Fast updates for visualization (60Hz)
-    val sensorData: StateFlow<SensorData?> = engine.currentSensorData
+    // Tare quaternion - stores the offset rotation to align the model with the device
+    private val _tareQuaternion = MutableStateFlow<RotationVector?>(null)
 
-    // Sensor history for graphs
-    val sensorHistory: StateFlow<List<SensorData>> = engine.sensorHistory
+    // Fast updates for visualization (60Hz) - with tare applied
+    val sensorData: StateFlow<SensorData?> = engine.currentSensorData.map { data ->
+        data?.let { applyTare(it, _tareQuaternion.value) }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, engine.currentSensorData.value)
+
+    // Sensor history for graphs - with tare applied
+    val sensorHistory: StateFlow<List<SensorData>> = combine(
+        engine.sensorHistory,
+        _tareQuaternion
+    ) { history, tare ->
+        if (tare == null) {
+            history
+        } else {
+            history.map { data -> applyTare(data, tare) }
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, engine.sensorHistory.value)
 
     // Detected tricks
     val detectedTricks: StateFlow<List<TrickEvent>> = engine.detectedTricks
@@ -57,6 +77,64 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
 
     fun clearHistory() {
         engine.clearHistory()
+    }
+
+    fun tare() {
+        val currentData = engine.currentSensorData.value
+        if (currentData != null) {
+            _tareQuaternion.value = currentData.rotationVector
+        }
+    }
+
+    /**
+     * Apply tare quaternion to sensor data's rotation vector
+     */
+    private fun applyTare(data: SensorData, tareQuat: RotationVector?): SensorData {
+        if (tareQuat == null) return data
+
+        val rotVec = data.rotationVector
+        val x = rotVec.x
+        val y = rotVec.y
+        val z = rotVec.z
+        val w = rotVec.scalar ?: computeScalar(x.toDouble(), y.toDouble(), z.toDouble())
+
+        val tareX = tareQuat.x
+        val tareY = tareQuat.y
+        val tareZ = tareQuat.z
+        val tareW = tareQuat.scalar ?: computeScalar(tareX.toDouble(), tareY.toDouble(), tareZ.toDouble())
+
+        // Compute inverse of tare quaternion (conjugate for unit quaternions)
+        val tareInvX = -tareX
+        val tareInvY = -tareY
+        val tareInvZ = -tareZ
+        val tareInvW = tareW
+
+        // Multiply: result = tareInverse * sensorQuat
+        val resultW = tareInvW * w - tareInvX * x - tareInvY * y - tareInvZ * z
+        val resultX = tareInvW * x + tareInvX * w + tareInvY * z - tareInvZ * y
+        val resultY = tareInvW * y - tareInvX * z + tareInvY * w + tareInvZ * x
+        val resultZ = tareInvW * z + tareInvX * y - tareInvY * x + tareInvZ * w
+
+        val taredRotationVector = RotationVector(
+            x = resultX,
+            y = resultY,
+            z = resultZ,
+            scalar = resultW
+        )
+
+        return data.copy(rotationVector = taredRotationVector)
+    }
+
+    /**
+     * Compute the scalar (w) component if not provided
+     */
+    private fun computeScalar(x: Double, y: Double, z: Double): Float {
+        val sumSquares = x * x + y * y + z * z
+        return if (sumSquares < 1.0) {
+            sqrt(1.0 - sumSquares).toFloat()
+        } else {
+            0f
+        }
     }
 
     init {
