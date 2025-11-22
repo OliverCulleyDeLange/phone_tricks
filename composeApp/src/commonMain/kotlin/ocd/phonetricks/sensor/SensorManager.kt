@@ -4,12 +4,12 @@ import kotlinx.coroutines.flow.Flow
 import ocd.phonetricks.data.*
 
 interface SensorManager {
-    val accelerometerFlow: Flow<AccelerometerReading>
-    val gyroscopeFlow: Flow<GyroscopeReading>
-    val magnetometerFlow: Flow<MagnetometerReading>?
-    val rotationVectorFlow: Flow<RotationVectorReading>
-    val linearAccelerationFlow: Flow<LinearAccelerationReading>?
-    val gravityFlow: Flow<GravityReading>?
+    val accelerometerFlow: Flow<Accelerometer>
+    val gyroscopeFlow: Flow<Gyroscope>
+    val magnetometerFlow: Flow<Magnetometer>?
+    val rotationVectorFlow: Flow<RotationVector>
+    val linearAccelerationFlow: Flow<LinearAcceleration>?
+    val gravityFlow: Flow<Gravity>?
 }
 
 expect fun createSensorManager(): SensorManager

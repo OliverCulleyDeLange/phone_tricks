@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Accelerometer(
+    val timestampMs: Long,
     val x: Float,
     val y: Float,
     val z: Float
@@ -11,6 +12,7 @@ data class Accelerometer(
 
 @Serializable
 data class Gyroscope(
+    val timestampMs: Long,
     val x: Float,
     val y: Float,
     val z: Float
@@ -18,6 +20,7 @@ data class Gyroscope(
 
 @Serializable
 data class Magnetometer(
+    val timestampMs: Long,
     val x: Float,
     val y: Float,
     val z: Float
@@ -25,6 +28,7 @@ data class Magnetometer(
 
 @Serializable
 data class RotationVector(
+    val timestampMs: Long,
     val x: Float,
     val y: Float,
     val z: Float,
@@ -33,6 +37,7 @@ data class RotationVector(
 
 @Serializable
 data class LinearAcceleration(
+    val timestampMs: Long,
     val x: Float,
     val y: Float,
     val z: Float
@@ -40,43 +45,8 @@ data class LinearAcceleration(
 
 @Serializable
 data class Gravity(
+    val timestampMs: Long,
     val x: Float,
     val y: Float,
     val z: Float
-)
-
-@Serializable
-data class AccelerometerReading(
-    val timestampMs: Long,
-    val data: Accelerometer
-)
-
-@Serializable
-data class GyroscopeReading(
-    val timestampMs: Long,
-    val data: Gyroscope
-)
-
-@Serializable
-data class MagnetometerReading(
-    val timestampMs: Long,
-    val data: Magnetometer
-)
-
-@Serializable
-data class RotationVectorReading(
-    val timestampMs: Long,
-    val data: RotationVector
-)
-
-@Serializable
-data class LinearAccelerationReading(
-    val timestampMs: Long,
-    val data: LinearAcceleration
-)
-
-@Serializable
-data class GravityReading(
-    val timestampMs: Long,
-    val data: Gravity
 )

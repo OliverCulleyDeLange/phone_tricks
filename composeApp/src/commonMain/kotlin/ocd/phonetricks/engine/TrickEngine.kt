@@ -18,12 +18,12 @@ class TrickEngine(
     private val scope: CoroutineScope
 ) {
     private val maxHistorySize = 1000
-    private val accelerometerBuffer = RingBuffer<AccelerometerReading>(maxHistorySize)
-    private val gyroscopeBuffer = RingBuffer<GyroscopeReading>(maxHistorySize)
-    private val magnetometerBuffer = RingBuffer<MagnetometerReading>(maxHistorySize)
-    private val rotationVectorBuffer = RingBuffer<RotationVectorReading>(maxHistorySize)
-    private val linearAccelerationBuffer = RingBuffer<LinearAccelerationReading>(maxHistorySize)
-    private val gravityBuffer = RingBuffer<GravityReading>(maxHistorySize)
+    private val accelerometerBuffer = RingBuffer<Accelerometer>(maxHistorySize)
+    private val gyroscopeBuffer = RingBuffer<Gyroscope>(maxHistorySize)
+    private val magnetometerBuffer = RingBuffer<Magnetometer>(maxHistorySize)
+    private val rotationVectorBuffer = RingBuffer<RotationVector>(maxHistorySize)
+    private val linearAccelerationBuffer = RingBuffer<LinearAcceleration>(maxHistorySize)
+    private val gravityBuffer = RingBuffer<Gravity>(maxHistorySize)
 
     private val _bufferUpdate = MutableStateFlow(0L)
     val bufferUpdate: StateFlow<Long> = _bufferUpdate.asStateFlow()
@@ -98,31 +98,31 @@ class TrickEngine(
         gravityBuffer
     )
 
-    fun getCurrentAccelerometer(): AccelerometerReading? =
+    fun getCurrentAccelerometer(): Accelerometer? =
         if (accelerometerBuffer.isEmpty()) null else accelerometerBuffer[accelerometerBuffer.size() - 1]
 
-    fun getCurrentGyroscope(): GyroscopeReading? =
+    fun getCurrentGyroscope(): Gyroscope? =
         if (gyroscopeBuffer.isEmpty()) null else gyroscopeBuffer[gyroscopeBuffer.size() - 1]
 
-    fun getCurrentMagnetometer(): MagnetometerReading? =
+    fun getCurrentMagnetometer(): Magnetometer? =
         if (magnetometerBuffer.isEmpty()) null else magnetometerBuffer[magnetometerBuffer.size() - 1]
 
-    fun getCurrentRotationVector(): RotationVectorReading? =
+    fun getCurrentRotationVector(): RotationVector? =
         if (rotationVectorBuffer.isEmpty()) null else rotationVectorBuffer[rotationVectorBuffer.size() - 1]
 
-    fun getCurrentLinearAcceleration(): LinearAccelerationReading? =
+    fun getCurrentLinearAcceleration(): LinearAcceleration? =
         if (linearAccelerationBuffer.isEmpty()) null else linearAccelerationBuffer[linearAccelerationBuffer.size() - 1]
 
-    fun getCurrentGravity(): GravityReading? =
+    fun getCurrentGravity(): Gravity? =
         if (gravityBuffer.isEmpty()) null else gravityBuffer[gravityBuffer.size() - 1]
 
-    fun getAccelerometerHistory(): List<AccelerometerReading> = accelerometerBuffer.toList()
+    fun getAccelerometerHistory(): List<Accelerometer> = accelerometerBuffer.toList()
 
-    fun getGyroscopeHistory(): List<GyroscopeReading> = gyroscopeBuffer.toList()
-    fun getMagnetometerHistory(): List<MagnetometerReading> = magnetometerBuffer.toList()
-    fun getRotationVectorHistory(): List<RotationVectorReading> = rotationVectorBuffer.toList()
-    fun getLinearAccelerationHistory(): List<LinearAccelerationReading> = linearAccelerationBuffer.toList()
-    fun getGravityHistory(): List<GravityReading> = gravityBuffer.toList()
+    fun getGyroscopeHistory(): List<Gyroscope> = gyroscopeBuffer.toList()
+    fun getMagnetometerHistory(): List<Magnetometer> = magnetometerBuffer.toList()
+    fun getRotationVectorHistory(): List<RotationVector> = rotationVectorBuffer.toList()
+    fun getLinearAccelerationHistory(): List<LinearAcceleration> = linearAccelerationBuffer.toList()
+    fun getGravityHistory(): List<Gravity> = gravityBuffer.toList()
 
     private fun listenToSensors() {
         scope.launch {

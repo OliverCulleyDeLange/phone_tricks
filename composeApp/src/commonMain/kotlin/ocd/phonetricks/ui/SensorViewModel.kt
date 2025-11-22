@@ -24,43 +24,43 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
     // Tare quaternion - stores the offset rotation to align the model with the device
     private val _tareQuaternion = MutableStateFlow<RotationVector?>(null)
 
-    val accelerometerData: StateFlow<AccelerometerReading?> = engine.bufferUpdate.map {
+    val accelerometerData: StateFlow<Accelerometer?> = engine.bufferUpdate.map {
         engine.getCurrentAccelerometer()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val gyroscopeData: StateFlow<GyroscopeReading?> = engine.bufferUpdate.map {
+    val gyroscopeData: StateFlow<Gyroscope?> = engine.bufferUpdate.map {
         engine.getCurrentGyroscope()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val magnetometerData: StateFlow<MagnetometerReading?> = engine.bufferUpdate.map {
+    val magnetometerData: StateFlow<Magnetometer?> = engine.bufferUpdate.map {
         engine.getCurrentMagnetometer()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val rotationVectorData: StateFlow<RotationVectorReading?> = engine.bufferUpdate.map {
+    val rotationVectorData: StateFlow<RotationVector?> = engine.bufferUpdate.map {
         engine.getCurrentRotationVector()?.let { reading -> applyTare(reading, _tareQuaternion.value) }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val linearAccelerationData: StateFlow<LinearAccelerationReading?> = engine.bufferUpdate.map {
+    val linearAccelerationData: StateFlow<LinearAcceleration?> = engine.bufferUpdate.map {
         engine.getCurrentLinearAcceleration()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val gravityData: StateFlow<GravityReading?> = engine.bufferUpdate.map {
+    val gravityData: StateFlow<Gravity?> = engine.bufferUpdate.map {
         engine.getCurrentGravity()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val accelerometerHistory: StateFlow<List<AccelerometerReading>> = engine.bufferUpdate.map {
+    val accelerometerHistory: StateFlow<List<Accelerometer>> = engine.bufferUpdate.map {
         engine.getAccelerometerHistory()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val gyroscopeHistory: StateFlow<List<GyroscopeReading>> = engine.bufferUpdate.map {
+    val gyroscopeHistory: StateFlow<List<Gyroscope>> = engine.bufferUpdate.map {
         engine.getGyroscopeHistory()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val magnetometerHistory: StateFlow<List<MagnetometerReading>> = engine.bufferUpdate.map {
+    val magnetometerHistory: StateFlow<List<Magnetometer>> = engine.bufferUpdate.map {
         engine.getMagnetometerHistory()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val rotationVectorHistory: StateFlow<List<RotationVectorReading>> = engine.bufferUpdate.map {
+    val rotationVectorHistory: StateFlow<List<RotationVector>> = engine.bufferUpdate.map {
         val history = engine.getRotationVectorHistory()
         val tare = _tareQuaternion.value
         if (tare == null) {
@@ -70,11 +70,11 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val linearAccelerationHistory: StateFlow<List<LinearAccelerationReading>> = engine.bufferUpdate.map {
+    val linearAccelerationHistory: StateFlow<List<LinearAcceleration>> = engine.bufferUpdate.map {
         engine.getLinearAccelerationHistory()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val gravityHistory: StateFlow<List<GravityReading>> = engine.bufferUpdate.map {
+    val gravityHistory: StateFlow<List<Gravity>> = engine.bufferUpdate.map {
         engine.getGravityHistory()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -84,21 +84,20 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
     fun tare() {
         val currentData = engine.getCurrentRotationVector()
         if (currentData != null) {
-            _tareQuaternion.value = currentData.data
+            _tareQuaternion.value = currentData
         }
     }
 
     /**
      * Apply tare quaternion to sensor data's rotation vector
      */
-    private fun applyTare(reading: RotationVectorReading, tareQuat: RotationVector?): RotationVectorReading {
+    private fun applyTare(reading: RotationVector, tareQuat: RotationVector?): RotationVector {
         if (tareQuat == null) return reading
 
-        val rotVec = reading.data
-        val x = rotVec.x
-        val y = rotVec.y
-        val z = rotVec.z
-        val w = rotVec.scalar ?: computeScalar(x.toDouble(), y.toDouble(), z.toDouble())
+        val x = reading.x
+        val y = reading.y
+        val z = reading.z
+        val w = reading.scalar ?: computeScalar(x.toDouble(), y.toDouble(), z.toDouble())
 
         val tareX = tareQuat.x
         val tareY = tareQuat.y
@@ -115,14 +114,13 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
         val resultY = tareInvW * y - tareInvX * z + tareInvY * w + tareInvZ * x
         val resultZ = tareInvW * z + tareInvX * y - tareInvY * x + tareInvZ * w
 
-        val taredRotationVector = RotationVector(
+        return RotationVector(
+            timestampMs = reading.timestampMs,
             x = resultX,
             y = resultY,
             z = resultZ,
             scalar = resultW
         )
-
-        return reading.copy(data = taredRotationVector)
     }
 
     /**

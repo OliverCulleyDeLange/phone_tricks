@@ -86,7 +86,7 @@ fun SensorScreen(viewModel: SensorViewModel) {
 
                             rotationVectorData?.let { data ->
                                 PhoneVisualization3D(
-                                    rotationVector = data.data,
+                                    rotationVector = data,
                                     onTareRequest = { viewModel.tare() },
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -107,26 +107,26 @@ fun SensorScreen(viewModel: SensorViewModel) {
                     SensorGraph(
                         title = "Accelerometer (m/s²)",
                         sensorHistory = accelerometerHistory,
-                        extractX = { it.data.x },
-                        extractY = { it.data.y },
-                        extractZ = { it.data.z }
+                        extractX = { it.x },
+                        extractY = { it.y },
+                        extractZ = { it.z }
                     )
 
                     SensorGraph(
                         title = "Gyroscope (rad/s)",
                         sensorHistory = gyroscopeHistory,
-                        extractX = { it.data.x },
-                        extractY = { it.data.y },
-                        extractZ = { it.data.z }
+                        extractX = { it.x },
+                        extractY = { it.y },
+                        extractZ = { it.z }
                     )
 
                     if (magnetometerHistory.isNotEmpty()) {
                         SensorGraph(
                             title = "Magnetometer (µT)",
                             sensorHistory = magnetometerHistory,
-                            extractX = { it.data.x },
-                            extractY = { it.data.y },
-                            extractZ = { it.data.z }
+                            extractX = { it.x },
+                            extractY = { it.y },
+                            extractZ = { it.z }
                         )
                     }
 
@@ -134,9 +134,9 @@ fun SensorScreen(viewModel: SensorViewModel) {
                         SensorGraph(
                             title = "Linear Acceleration (m/s²)",
                             sensorHistory = linearAccelerationHistory,
-                            extractX = { it.data.x },
-                            extractY = { it.data.y },
-                            extractZ = { it.data.z }
+                            extractX = { it.x },
+                            extractY = { it.y },
+                            extractZ = { it.z }
                         )
                     }
 
@@ -144,9 +144,9 @@ fun SensorScreen(viewModel: SensorViewModel) {
                         SensorGraph(
                             title = "Gravity (m/s²)",
                             sensorHistory = gravityHistory,
-                            extractX = { it.data.x },
-                            extractY = { it.data.y },
-                            extractZ = { it.data.z }
+                            extractX = { it.x },
+                            extractY = { it.y },
+                            extractZ = { it.z }
                         )
                     }
 
@@ -154,9 +154,9 @@ fun SensorScreen(viewModel: SensorViewModel) {
                         SensorGraph(
                             title = "Rotation Vector (Quaternion)",
                             sensorHistory = rotationVectorHistory,
-                            extractX = { it.data.x },
-                            extractY = { it.data.y },
-                            extractZ = { it.data.z }
+                            extractX = { it.x },
+                            extractY = { it.y },
+                            extractZ = { it.z }
                         )
                     }
 

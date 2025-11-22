@@ -13,12 +13,12 @@ import ocd.phonetricks.utils.currentTimeMillis
 @Serializable
 data class TrainingSample(
     val label: String,
-    val accelerometerData: List<AccelerometerReading>,
-    val gyroscopeData: List<GyroscopeReading>,
-    val magnetometerData: List<MagnetometerReading>,
-    val rotationVectorData: List<RotationVectorReading>,
-    val linearAccelerationData: List<LinearAccelerationReading>,
-    val gravityData: List<GravityReading>,
+    val accelerometerData: List<Accelerometer>,
+    val gyroscopeData: List<Gyroscope>,
+    val magnetometerData: List<Magnetometer>,
+    val rotationVectorData: List<RotationVector>,
+    val linearAccelerationData: List<LinearAcceleration>,
+    val gravityData: List<Gravity>,
     val recordingTimestampMs: Long,
     val sampleRate: String = ""
 )
@@ -45,12 +45,12 @@ class TrainingDataRecorder {
      * @return JSON string representation of the training sample
      */
     fun serializeToJson(
-        accelerometerBuffer: RingBuffer<AccelerometerReading>,
-        gyroscopeBuffer: RingBuffer<GyroscopeReading>,
-        magnetometerBuffer: RingBuffer<MagnetometerReading>,
-        rotationVectorBuffer: RingBuffer<RotationVectorReading>,
-        linearAccelerationBuffer: RingBuffer<LinearAccelerationReading>,
-        gravityBuffer: RingBuffer<GravityReading>,
+        accelerometerBuffer: RingBuffer<Accelerometer>,
+        gyroscopeBuffer: RingBuffer<Gyroscope>,
+        magnetometerBuffer: RingBuffer<Magnetometer>,
+        rotationVectorBuffer: RingBuffer<RotationVector>,
+        linearAccelerationBuffer: RingBuffer<LinearAcceleration>,
+        gravityBuffer: RingBuffer<Gravity>,
         label: TrickType
     ): String {
         val sample = TrainingSample(
@@ -66,16 +66,38 @@ class TrainingDataRecorder {
         return json.encodeToString(sample)
     }
 
+    fun serializeToJson(
+        accelerometerBuffer: RingBuffer<Accelerometer>,
+        gyroscopeBuffer: RingBuffer<Gyroscope>,
+        magnetometerBuffer: RingBuffer<Magnetometer>,
+        rotationVectorBuffer: RingBuffer<RotationVector>,
+        linearAccelerationBuffer: RingBuffer<LinearAcceleration>,
+        gravityBuffer: RingBuffer<Gravity>,
+        labelString: String
+    ): String {
+        val sample = TrainingSample(
+            label = labelString,
+            accelerometerData = accelerometerBuffer.toList(),
+            gyroscopeData = gyroscopeBuffer.toList(),
+            magnetometerData = magnetometerBuffer.toList(),
+            rotationVectorData = rotationVectorBuffer.toList(),
+            linearAccelerationData = linearAccelerationBuffer.toList(),
+            gravityData = gravityBuffer.toList(),
+            recordingTimestampMs = currentTimeMillis()
+        )
+        return json.encodeToString(sample)
+    }
+
     /**
      * Get statistics about the current buffers for display purposes.
      */
     fun getBufferStats(
-        accelerometerBuffer: RingBuffer<AccelerometerReading>,
-        gyroscopeBuffer: RingBuffer<GyroscopeReading>,
-        magnetometerBuffer: RingBuffer<MagnetometerReading>,
-        rotationVectorBuffer: RingBuffer<RotationVectorReading>,
-        linearAccelerationBuffer: RingBuffer<LinearAccelerationReading>,
-        gravityBuffer: RingBuffer<GravityReading>
+        accelerometerBuffer: RingBuffer<Accelerometer>,
+        gyroscopeBuffer: RingBuffer<Gyroscope>,
+        magnetometerBuffer: RingBuffer<Magnetometer>,
+        rotationVectorBuffer: RingBuffer<RotationVector>,
+        linearAccelerationBuffer: RingBuffer<LinearAcceleration>,
+        gravityBuffer: RingBuffer<Gravity>
     ): BufferStats {
         return BufferStats(
             accelerometer = getSensorStats(accelerometerBuffer),
@@ -96,12 +118,12 @@ class TrainingDataRecorder {
 
         val timestamps = data.map { reading ->
             when (reading) {
-                is AccelerometerReading -> reading.timestampMs
-                is GyroscopeReading -> reading.timestampMs
-                is MagnetometerReading -> reading.timestampMs
-                is RotationVectorReading -> reading.timestampMs
-                is LinearAccelerationReading -> reading.timestampMs
-                is GravityReading -> reading.timestampMs
+                is Accelerometer -> reading.timestampMs
+                is Gyroscope -> reading.timestampMs
+                is Magnetometer -> reading.timestampMs
+                is RotationVector -> reading.timestampMs
+                is LinearAcceleration -> reading.timestampMs
+                is Gravity -> reading.timestampMs
                 else -> 0L
             }
         }

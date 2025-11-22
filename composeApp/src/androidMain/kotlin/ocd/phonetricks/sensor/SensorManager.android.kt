@@ -22,18 +22,16 @@ class AndroidSensorManager(context: Context) : SensorManager {
     private val linearAcceleration = androidSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
     private val gravity = androidSensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
 
-    override val accelerometerFlow: Flow<AccelerometerReading> = callbackFlow {
+    override val accelerometerFlow: Flow<Accelerometer> = callbackFlow {
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent?) {
                 event?.let {
                     trySend(
-                        AccelerometerReading(
+                        Accelerometer(
                             timestampMs = System.currentTimeMillis(),
-                            data = Accelerometer(
-                                x = it.values[0],
-                                y = it.values[1],
-                                z = it.values[2]
-                            )
+                            x = it.values[0],
+                            y = it.values[1],
+                            z = it.values[2]
                         )
                     )
                 }
@@ -51,18 +49,16 @@ class AndroidSensorManager(context: Context) : SensorManager {
         }
     }
 
-    override val gyroscopeFlow: Flow<GyroscopeReading> = callbackFlow {
+    override val gyroscopeFlow: Flow<Gyroscope> = callbackFlow {
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent?) {
                 event?.let {
                     trySend(
-                        GyroscopeReading(
+                        Gyroscope(
                             timestampMs = System.currentTimeMillis(),
-                            data = Gyroscope(
-                                x = it.values[0],
-                                y = it.values[1],
-                                z = it.values[2]
-                            )
+                            x = it.values[0],
+                            y = it.values[1],
+                            z = it.values[2]
                         )
                     )
                 }
@@ -80,19 +76,17 @@ class AndroidSensorManager(context: Context) : SensorManager {
         }
     }
 
-    override val magnetometerFlow: Flow<MagnetometerReading>? = magnetometer?.let {
+    override val magnetometerFlow: Flow<Magnetometer>? = magnetometer?.let {
         callbackFlow {
             val listener = object : SensorEventListener {
                 override fun onSensorChanged(event: SensorEvent?) {
                     event?.let {
                         trySend(
-                            MagnetometerReading(
+                            Magnetometer(
                                 timestampMs = System.currentTimeMillis(),
-                                data = Magnetometer(
-                                    x = it.values[0],
-                                    y = it.values[1],
-                                    z = it.values[2]
-                                )
+                                x = it.values[0],
+                                y = it.values[1],
+                                z = it.values[2]
                             )
                         )
                     }
@@ -109,19 +103,17 @@ class AndroidSensorManager(context: Context) : SensorManager {
         }
     }
 
-    override val rotationVectorFlow: Flow<RotationVectorReading> = callbackFlow {
+    override val rotationVectorFlow: Flow<RotationVector> = callbackFlow {
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent?) {
                 event?.let {
                     trySend(
-                        RotationVectorReading(
+                        RotationVector(
                             timestampMs = System.currentTimeMillis(),
-                            data = RotationVector(
-                                x = it.values[0],
-                                y = it.values[1],
-                                z = it.values[2],
-                                scalar = if (it.values.size > 3) it.values[3] else null
-                            )
+                            x = it.values[0],
+                            y = it.values[1],
+                            z = it.values[2],
+                            scalar = if (it.values.size > 3) it.values[3] else null
                         )
                     )
                 }
@@ -139,19 +131,17 @@ class AndroidSensorManager(context: Context) : SensorManager {
         }
     }
 
-    override val linearAccelerationFlow: Flow<LinearAccelerationReading>? = linearAcceleration?.let {
+    override val linearAccelerationFlow: Flow<LinearAcceleration>? = linearAcceleration?.let {
         callbackFlow {
             val listener = object : SensorEventListener {
                 override fun onSensorChanged(event: SensorEvent?) {
                     event?.let {
                         trySend(
-                            LinearAccelerationReading(
+                            LinearAcceleration(
                                 timestampMs = System.currentTimeMillis(),
-                                data = LinearAcceleration(
-                                    x = it.values[0],
-                                    y = it.values[1],
-                                    z = it.values[2]
-                                )
+                                x = it.values[0],
+                                y = it.values[1],
+                                z = it.values[2]
                             )
                         )
                     }
@@ -168,19 +158,17 @@ class AndroidSensorManager(context: Context) : SensorManager {
         }
     }
 
-    override val gravityFlow: Flow<GravityReading>? = gravity?.let {
+    override val gravityFlow: Flow<Gravity>? = gravity?.let {
         callbackFlow {
             val listener = object : SensorEventListener {
                 override fun onSensorChanged(event: SensorEvent?) {
                     event?.let {
                         trySend(
-                            GravityReading(
+                            Gravity(
                                 timestampMs = System.currentTimeMillis(),
-                                data = Gravity(
-                                    x = it.values[0],
-                                    y = it.values[1],
-                                    z = it.values[2]
-                                )
+                                x = it.values[0],
+                                y = it.values[1],
+                                z = it.values[2]
                             )
                         )
                     }
@@ -197,6 +185,7 @@ class AndroidSensorManager(context: Context) : SensorManager {
         }
     }
 }
+
 actual fun createSensorManager(): SensorManager {
     throw IllegalStateException("Context required for Android. Use createSensorManager(context) instead")
 }
