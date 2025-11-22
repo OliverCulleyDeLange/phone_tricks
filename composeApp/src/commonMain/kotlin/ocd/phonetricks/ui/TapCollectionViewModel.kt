@@ -9,14 +9,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import ocd.phonetricks.engine.TrickEngine
 import ocd.phonetricks.training.FileWriter
+import ocd.phonetricks.training.Labels
 import ocd.phonetricks.utils.currentTimeMillis
+
+enum class CollectionMode {
+    POSITIVE,
+    NEGATIVE
+}
 
 class TapCollectionViewModel(
     private val engine: TrickEngine,
     private val fileWriter: FileWriter
 ) : ViewModel() {
 
-    private val recordingDurationMs = 10000L
+    private val recordingDurationMs = 20000L
 
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
@@ -42,6 +48,43 @@ class TapCollectionViewModel(
     private val _sessionTag = MutableStateFlow("")
     val sessionTag: StateFlow<String> = _sessionTag.asStateFlow()
 
+    private val _selectedSurfaceTags = MutableStateFlow<Set<String>>(emptySet())
+    val selectedSurfaceTags: StateFlow<Set<String>> = _selectedSurfaceTags.asStateFlow()
+
+    private val _selectedTapTags = MutableStateFlow<Set<String>>(emptySet())
+    val selectedTapTags: StateFlow<Set<String>> = _selectedTapTags.asStateFlow()
+
+    private val _collectionMode = MutableStateFlow(CollectionMode.POSITIVE)
+    val collectionMode: StateFlow<CollectionMode> = _collectionMode.asStateFlow()
+
+    val surfaceTags = listOf("hard", "soft", "held")
+    val tapTags = listOf("soft", "medium", "hard", "quick-double", "quick-triple")
+    val negativeSampleTags = listOf("waving", "walking", "pocket", "table-vibration", "typing", "scrolling")
+
+    fun toggleSurfaceTag(tag: String) {
+        val current = _selectedSurfaceTags.value
+        _selectedSurfaceTags.value = if (current.contains(tag)) {
+            current - tag
+        } else {
+            current + tag
+        }
+    }
+
+    fun toggleTapTag(tag: String) {
+        val current = _selectedTapTags.value
+        _selectedTapTags.value = if (current.contains(tag)) {
+            current - tag
+        } else {
+            current + tag
+        }
+    }
+
+    fun setCollectionMode(mode: CollectionMode) {
+        if (!_isRecording.value) {
+            _collectionMode.value = mode
+        }
+    }
+
     fun updateSessionTag(tag: String) {
         _sessionTag.value = tag
     }
@@ -62,7 +105,7 @@ class TapCollectionViewModel(
             }
             if (_isRecording.value) {
                 stopRecording()
-                if (_tapTimestamps.value.isNotEmpty()) {
+                if (_collectionMode.value == CollectionMode.NEGATIVE || _tapTimestamps.value.isNotEmpty()) {
                     saveSession()
                 }
             }
@@ -76,17 +119,13 @@ class TapCollectionViewModel(
 
     fun recordTap() {
         if (!_isRecording.value) return
+        if (_collectionMode.value == CollectionMode.NEGATIVE) return
 
         val timestamp = currentTimeMillis()
         _tapTimestamps.value = _tapTimestamps.value + timestamp
     }
 
     private fun saveSession() {
-        if (_tapTimestamps.value.isEmpty()) {
-            println("No taps recorded, not saving")
-            return
-        }
-
         viewModelScope.launch {
             _isSaving.value = true
 
@@ -95,11 +134,23 @@ class TapCollectionViewModel(
                 val recordingEnd = currentTimeMillis()
                 val tapCount = _tapTimestamps.value.size
 
+                val labels = Labels(
+                    sessionTag = _sessionTag.value,
+                    surface = _selectedSurfaceTags.value.toList(),
+                    taps = _selectedTapTags.value.toList()
+                )
+
                 val timestamp = currentTimeMillis()
-                val filename = "tap_collection_${_sessionTag.value}_${tapCount}taps_${timestamp}.json"
+                val sessionTagPart = if (_sessionTag.value.isNotBlank()) "${_sessionTag.value}_" else ""
+                val modePrefix = if (_collectionMode.value == CollectionMode.NEGATIVE) "negative_" else ""
+                val filename = if (_collectionMode.value == CollectionMode.NEGATIVE) {
+                    "tap_collection_${modePrefix}${sessionTagPart}${timestamp}.json"
+                } else {
+                    "tap_collection_${sessionTagPart}${tapCount}taps_${timestamp}.json"
+                }
 
                 val jsonData = engine.exportTrainingDataWithTimestamps(
-                    label = _sessionTag.value,
+                    labels = labels,
                     tapTimestamps = _tapTimestamps.value,
                     recordingStartMs = recordingStart,
                     recordingEndMs = recordingEnd

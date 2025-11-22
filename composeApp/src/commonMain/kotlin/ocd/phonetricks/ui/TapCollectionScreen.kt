@@ -3,7 +3,9 @@ package ocd.phonetricks.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -19,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ocd.phonetricks.utils.currentTimeMillis
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TapCollectionScreen(viewModel: TapCollectionViewModel) {
     val isRecording by viewModel.isRecording.collectAsState()
@@ -28,6 +31,9 @@ fun TapCollectionScreen(viewModel: TapCollectionViewModel) {
     val lastSavedFile by viewModel.lastSavedFile.collectAsState()
     val isSaving by viewModel.isSaving.collectAsState()
     val sessionTag by viewModel.sessionTag.collectAsState()
+    val selectedSurfaceTags by viewModel.selectedSurfaceTags.collectAsState()
+    val selectedTapTags by viewModel.selectedTapTags.collectAsState()
+    val collectionMode by viewModel.collectionMode.collectAsState()
 
     Box(
         modifier = Modifier
@@ -52,6 +58,7 @@ fun TapCollectionScreen(viewModel: TapCollectionViewModel) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
@@ -59,15 +66,120 @@ fun TapCollectionScreen(viewModel: TapCollectionViewModel) {
             Spacer(modifier = Modifier.height(32.dp))
 
             if (!isRecording) {
-                TextField(
-                    value = sessionTag,
-                    onValueChange = { viewModel.updateSessionTag(it) },
-                    label = { Text("Session Tag") },
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Enter session tag") },
-                    singleLine = true,
-                    enabled = !isRecording
-                )
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = collectionMode == CollectionMode.POSITIVE,
+                            onClick = { viewModel.setCollectionMode(CollectionMode.POSITIVE) },
+                            label = { Text("Positive (Taps)") },
+                            modifier = Modifier.weight(1f),
+                            enabled = !isRecording
+                        )
+                        FilterChip(
+                            selected = collectionMode == CollectionMode.NEGATIVE,
+                            onClick = { viewModel.setCollectionMode(CollectionMode.NEGATIVE) },
+                            label = { Text("Negative (No Taps)") },
+                            modifier = Modifier.weight(1f),
+                            enabled = !isRecording
+                        )
+                    }
+
+                    TextField(
+                        value = sessionTag,
+                        onValueChange = { viewModel.updateSessionTag(it) },
+                        label = { Text("Session Tag") },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Enter session tag") },
+                        singleLine = true,
+                        enabled = !isRecording
+                    )
+
+                    if (collectionMode == CollectionMode.POSITIVE) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Surface:",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold
+                            )
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                viewModel.surfaceTags.forEach { tag ->
+                                    FilterChip(
+                                        selected = selectedSurfaceTags.contains(tag),
+                                        onClick = { viewModel.toggleSurfaceTag(tag) },
+                                        label = { Text(tag) },
+                                        enabled = !isRecording
+                                    )
+                                }
+                            }
+                        }
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Taps:",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold
+                            )
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                viewModel.tapTags.forEach { tag ->
+                                    FilterChip(
+                                        selected = selectedTapTags.contains(tag),
+                                        onClick = { viewModel.toggleTapTag(tag) },
+                                        label = { Text(tag) },
+                                        enabled = !isRecording
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Activity Type:",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold
+                            )
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                viewModel.negativeSampleTags.forEach { tag ->
+                                    FilterChip(
+                                        selected = selectedTapTags.contains(tag),
+                                        onClick = { viewModel.toggleTapTag(tag) },
+                                        label = { Text(tag) },
+                                        enabled = !isRecording
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             Column(
@@ -75,7 +187,7 @@ fun TapCollectionScreen(viewModel: TapCollectionViewModel) {
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 Text(
-                    text = "Tap Collection",
+                    text = if (collectionMode == CollectionMode.NEGATIVE) "Negative Sample Collection" else "Tap Collection",
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -97,22 +209,24 @@ fun TapCollectionScreen(viewModel: TapCollectionViewModel) {
                     )
                 } else {
                     Icon(
-                        Icons.Default.TouchApp,
+                        if (collectionMode == CollectionMode.NEGATIVE) Icons.Default.TouchApp else Icons.Default.TouchApp,
                         contentDescription = null,
                         modifier = Modifier.size(100.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
 
-                Text(
-                    text = "Taps: ${tapTimestamps.size}",
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isRecording)
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.onSurface
-                )
+                if (collectionMode == CollectionMode.POSITIVE) {
+                    Text(
+                        text = "Taps: ${tapTimestamps.size}",
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isRecording)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurface
+                    )
+                }
 
                 if (savedSessionCount > 0 && !isRecording) {
                     Text(
@@ -125,7 +239,10 @@ fun TapCollectionScreen(viewModel: TapCollectionViewModel) {
 
                 if (isRecording) {
                     Text(
-                        text = "Tap anywhere on the screen",
+                        text = if (collectionMode == CollectionMode.NEGATIVE)
+                            "Wave, move, or use the phone normally WITHOUT tapping"
+                        else
+                            "Tap anywhere on the screen",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary,
                         textAlign = TextAlign.Center
@@ -164,7 +281,7 @@ fun TapCollectionScreen(viewModel: TapCollectionViewModel) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(32.dp))
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "Start 10s Collection",
+                            text = "Start 20s Collection",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )

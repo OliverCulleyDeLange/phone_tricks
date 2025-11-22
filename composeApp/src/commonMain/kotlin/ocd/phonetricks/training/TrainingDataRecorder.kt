@@ -24,11 +24,21 @@ data class TrainingSample(
 )
 
 /**
+ * Represents structured labels for a training sample.
+ */
+@Serializable
+data class Labels(
+    val sessionTag: String = "",
+    val surface: List<String> = emptyList(),
+    val taps: List<String> = emptyList()
+)
+
+/**
  * Represents a single labeled training sample with sensor data, tap timestamps, and its label.
  */
 @Serializable
 data class LabeledTrainingSample(
-    val label: String,
+    val labels: Labels,
     val tapTimestamps: List<Long>,
     val accelerometerData: List<Accelerometer>,
     val gyroscopeData: List<Gyroscope>,
@@ -113,13 +123,13 @@ class TrainingDataRecorder {
         rotationVectorBuffer: RingBuffer<RotationVector>,
         linearAccelerationBuffer: RingBuffer<LinearAcceleration>,
         gravityBuffer: RingBuffer<Gravity>,
-        label: String,
+        labels: Labels,
         tapTimestamps: List<Long>,
         recordingStartMs: Long,
         recordingEndMs: Long
     ): String {
         val sample = LabeledTrainingSample(
-            label = label,
+            labels = labels,
             tapTimestamps = tapTimestamps,
             accelerometerData = accelerometerBuffer.toList(),
             gyroscopeData = gyroscopeBuffer.toList(),

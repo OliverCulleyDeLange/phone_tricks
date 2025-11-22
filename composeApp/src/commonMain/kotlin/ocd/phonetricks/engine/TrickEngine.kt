@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import ocd.phonetricks.data.*
 import ocd.phonetricks.sensor.SensorManager
+import ocd.phonetricks.training.Labels
 import ocd.phonetricks.training.TrainingDataRecorder
 
 class TrickEngine(
@@ -83,7 +84,7 @@ class TrickEngine(
     }
 
     fun exportTrainingDataWithTimestamps(
-        label: String,
+        labels: Labels,
         tapTimestamps: List<Long>,
         recordingStartMs: Long,
         recordingEndMs: Long
@@ -95,7 +96,7 @@ class TrickEngine(
             rotationVectorBuffer,
             linearAccelerationBuffer,
             gravityBuffer,
-            label,
+            labels,
             tapTimestamps,
             recordingStartMs,
             recordingEndMs
