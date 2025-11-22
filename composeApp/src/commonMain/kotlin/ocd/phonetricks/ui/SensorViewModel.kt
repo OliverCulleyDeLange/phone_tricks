@@ -74,9 +74,9 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
         val history = sensorHistory.value
         if (history.isEmpty()) return
 
-        val currentTime = history.last().timestamp
+        val currentTime = history.last().timestampMs
         val tenSecondsAgo = currentTime - 10_000_000_000L // 10 seconds in nanoseconds
-        val last10Seconds = history.filter { it.timestamp >= tenSecondsAgo }
+        val last10Seconds = history.filter { it.timestampMs >= tenSecondsAgo }
 
         _replaySnapshot.value = last10Seconds
         _playbackIndex.value = 0

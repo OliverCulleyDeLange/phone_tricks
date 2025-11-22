@@ -140,7 +140,7 @@ class AndroidSensorManager(context: Context) : SensorManager {
 
                 trySend(
                     SensorData(
-                        timestamp = System.currentTimeMillis(),
+                        timestampMs = System.currentTimeMillis(),
                         accelerometer = lastAccelerometer,
                         gyroscope = lastGyroscope,
                         magnetometer = lastMagnetometer,

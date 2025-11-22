@@ -12,6 +12,8 @@ tricks.
 - **Auto-start Recording**: Begins collecting data immediately on app launch
 - **Scrollable Dashboard**: View all sensors with organized sections
 - **Cross-Platform UI**: Compose Multiplatform UI works on Android and iOS
+- **Tap Detection**: Identifies taps on front, back, or any of the 4 edges using accelerometer data
+- **Trick Detection**: Detects spins and flips using gyroscope angular velocity
 
 ## Sensor Support
 
@@ -40,17 +42,21 @@ tricks.
 ### Shared Module (`composeApp/src/commonMain`)
 
 - **`data/`**: Data models for all sensor types (SensorData, Accelerometer, Gyroscope, Magnetometer,
-  etc.)
+  etc.) and detected tricks/taps (TrickEvent, TrickType)
 - **`sensor/`**: Sensor manager interface with expect/actual implementations
 - **`engine/`**:
-    - TrickEngine: Manages sensor data collection
+    - TrickEngine: Manages sensor data collection and event detection
     - RingBuffer: Efficient circular buffer for historical data
+  - TrickDetector: Detects spins and flips using gyroscope angular velocity
+  - TapDetector: Detects taps on phone surfaces using accelerometer impacts
 - **`ui/`**:
     - SensorScreen: Main scrollable dashboard
     - SensorViewModel: State management
     - **`components/`**:
         - SensorGraph: Time-series graph with adaptive scaling
         - AxisVisualization: 3D real-time visualization
+      - PhoneVisualization3D: Animated 3D phone model
+      - TrickTimeline: Scrolling timeline showing detected tricks and taps
 
 ### Platform-Specific Implementations
 
@@ -130,9 +136,61 @@ tricks.
 - **CPU**: Efficient Canvas drawing, no unnecessary allocations
 - **Startup**: Auto-begins recording immediately
 
+## Trick and Tap Detection
+
+### Trick Detection (TrickDetector)
+
+The **TrickDetector** analyzes gyroscope data to identify rotational tricks:
+
+- **Spin Detection**: Detects rotation about the Z-axis (phone spinning flat like on a table)
+    - Monitors angular velocity on Z-axis
+    - Requires rotation speed > 2.0 rad/s (~115°/s)
+    - Triggers after completing a full 360° rotation (2π radians)
+    - Confidence score based on rotation speed
+
+- **Flip Detection**: Detects rotation about X or Y axis (phone flipping end-over-end)
+    - Monitors angular velocity on X and Y axes
+    - Same threshold and rotation requirements as spins
+    - Detects both front-flips and side-flips
+
+### Tap Detection (TapDetector)
+
+The **TapDetector** uses accelerometer data to identify impact events and determine which surface
+was tapped:
+
+- **Impact Detection**:
+    - Monitors acceleration magnitude for sudden spikes
+    - Threshold: 15 m/s² (adjustable based on testing)
+    - Uses linear acceleration if available (excludes gravity), otherwise uses raw accelerometer
+    - 300ms cooldown between detections to avoid double-taps
+
+- **Surface Identification**:
+    - Analyzes the acceleration vector in device coordinates
+    - Finds the axis with maximum absolute acceleration
+    - Determines tap location based on primary impact direction:
+        - **Z-axis**: Front (screen) or Back
+        - **Y-axis**: Top or Bottom edge
+        - **X-axis**: Left or Right edge
+
+- **Coordinate System** (phone in portrait mode):
+    - X: Points right
+    - Y: Points up toward top of phone
+    - Z: Points out of screen toward user
+
+- **Confidence Score**: Based on impact magnitude (normalized between threshold and 3x threshold)
+
+### UI Display
+
+All detected events appear in the **Trick Timeline** component:
+
+- Scrolling timeline showing last 10 seconds
+- Color-coded dots: Red (Spin), Cyan (Flip), Yellow (Tap)
+- Tap events show surface labels (F/B/T/Bo/L/R)
+- Spin/Flip events show confidence percentage
+- Counter badges showing total count for each event type
+
 ## Future Enhancements
 
-- Trick detection algorithms (spins, flips, combos)
 - 10-second playback visualization with animated phone representation
 - Pattern recognition for specific tricks
 - Recording and replay of sensor data sessions

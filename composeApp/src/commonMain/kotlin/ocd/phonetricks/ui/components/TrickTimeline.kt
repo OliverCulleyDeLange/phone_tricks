@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ocd.phonetricks.data.TrickEvent
 import ocd.phonetricks.data.TrickType
+import ocd.phonetricks.data.isTap
 import kotlinx.coroutines.delay
 
 @Composable
@@ -53,6 +54,7 @@ fun TrickTimeline(
                 ) {
                     LegendItem("Spin", Color(0xFFFF6B6B))
                     LegendItem("Flip", Color(0xFF4ECDC4))
+                    LegendItem("Tap", Color(0xFFFFD93D))
                 }
             }
 
@@ -65,6 +67,11 @@ fun TrickTimeline(
             ) {
                 TrickCount("Spins", tricks.count { it.type == TrickType.SPIN }, Color(0xFFFF6B6B))
                 TrickCount("Flips", tricks.count { it.type == TrickType.FLIP }, Color(0xFF4ECDC4))
+                TrickCount(
+                    "Taps",
+                    tricks.count { it.type.isTap() },
+                    Color(0xFFFFD93D)
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -77,7 +84,7 @@ fun TrickTimeline(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No tricks detected yet. Try spinning or flipping your phone!",
+                        text = "No tricks detected yet. Try spinning, flipping, or tapping your phone!",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -118,6 +125,12 @@ fun TrickTimeline(
                         val color = when (trick.type) {
                             TrickType.SPIN -> Color(0xFFFF6B6B)
                             TrickType.FLIP -> Color(0xFF4ECDC4)
+                            TrickType.TAP_FRONT -> Color(0xFFFFD93D)
+                            TrickType.TAP_BACK -> Color(0xFFFFD93D)
+                            TrickType.TAP_TOP -> Color(0xFFFFD93D)
+                            TrickType.TAP_BOTTOM -> Color(0xFFFFD93D)
+                            TrickType.TAP_LEFT -> Color(0xFFFFD93D)
+                            TrickType.TAP_RIGHT -> Color(0xFFFFD93D)
                         }
 
                         // Dot size based on confidence
@@ -138,32 +151,70 @@ fun TrickTimeline(
                             center = Offset(x, height / 2)
                         )
 
-                        // Draw confidence percentage in the dot
-                        val confidencePercent = (trick.confidence * 100).toInt()
-                        val text = "$confidencePercent%"
+                        // Draw confidence percentage in the dot for spin/flip, or tap label above dot for taps
+                        val isTap = trick.type.isTap()
 
                         drawIntoCanvas { canvas ->
-                            val textLayoutResult = textMeasurer.measure(
-                                text = text,
-                                style = TextStyle(
-                                    color = Color.White,
-                                    fontSize = 10.sp
+                            if (isTap) {
+                                // Show tap direction label above the dot
+                                val tapLabel = when (trick.type) {
+                                    TrickType.TAP_FRONT -> "F"
+                                    TrickType.TAP_BACK -> "B"
+                                    TrickType.TAP_TOP -> "T"
+                                    TrickType.TAP_BOTTOM -> "Bo"
+                                    TrickType.TAP_LEFT -> "L"
+                                    TrickType.TAP_RIGHT -> "R"
+                                    else -> ""
+                                }
+
+                                val textLayoutResult = textMeasurer.measure(
+                                    text = tapLabel,
+                                    style = TextStyle(
+                                        color = color,
+                                        fontSize = 12.sp
+                                    )
                                 )
-                            )
 
-                            val textWidth = textLayoutResult.size.width
-                            val textHeight = textLayoutResult.size.height
+                                val textWidth = textLayoutResult.size.width
+                                val textHeight = textLayoutResult.size.height
 
-                            canvas.save()
-                            canvas.translate(
-                                x - textWidth / 2,
-                                height / 2 - textHeight / 2
-                            )
-                            drawText(
-                                textLayoutResult = textLayoutResult,
-                                topLeft = Offset.Zero
-                            )
-                            canvas.restore()
+                                canvas.save()
+                                canvas.translate(
+                                    x - textWidth / 2,
+                                    height / 2 - radius - textHeight - 4f
+                                )
+                                drawText(
+                                    textLayoutResult = textLayoutResult,
+                                    topLeft = Offset.Zero
+                                )
+                                canvas.restore()
+                            } else {
+                                // Show confidence percentage inside the dot for spin/flip
+                                val confidencePercent = (trick.confidence * 100).toInt()
+                                val text = "$confidencePercent%"
+
+                                val textLayoutResult = textMeasurer.measure(
+                                    text = text,
+                                    style = TextStyle(
+                                        color = Color.White,
+                                        fontSize = 10.sp
+                                    )
+                                )
+
+                                val textWidth = textLayoutResult.size.width
+                                val textHeight = textLayoutResult.size.height
+
+                                canvas.save()
+                                canvas.translate(
+                                    x - textWidth / 2,
+                                    height / 2 - textHeight / 2
+                                )
+                                drawText(
+                                    textLayoutResult = textLayoutResult,
+                                    topLeft = Offset.Zero
+                                )
+                                canvas.restore()
+                            }
                         }
                     }
 

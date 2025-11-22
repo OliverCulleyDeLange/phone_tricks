@@ -9,7 +9,6 @@ import ocd.phonetricks.data.Accelerometer
 import ocd.phonetricks.data.Gravity
 import ocd.phonetricks.data.Gyroscope
 import ocd.phonetricks.data.LinearAcceleration
-import ocd.phonetricks.data.Magnetometer
 import ocd.phonetricks.data.RotationVector
 import ocd.phonetricks.data.SensorData
 import platform.CoreMotion.CMMotionManager
@@ -87,7 +86,7 @@ class IOSSensorManager : SensorManager {
                     
                     trySend(
                         SensorData(
-                            timestamp = (time(null) * 1000),
+                            timestampMs = (time(null) * 1000),
                             accelerometer = lastAccelerometer,
                             gyroscope = lastGyroscope,
                             magnetometer = null,

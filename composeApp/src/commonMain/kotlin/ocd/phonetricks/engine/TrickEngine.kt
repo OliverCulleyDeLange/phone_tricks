@@ -27,7 +27,7 @@ class TrickEngine(
 
     // Trick detection
     private val trickDetector = TrickDetector()
-    private var previousSensorData: SensorData? = null
+    private val tapDetector = TapDetector()
 
     private val _detectedTricks = MutableStateFlow<List<TrickEvent>>(emptyList())
     val detectedTricks: StateFlow<List<TrickEvent>> = _detectedTricks.asStateFlow()
@@ -47,13 +47,17 @@ class TrickEngine(
                     // Update the state flow with the current buffer contents
                     _sensorHistory.value = ringBuffer.toList()
 
-                    // Detect tricks
-                    val newTricks = trickDetector.processSensorData(data, previousSensorData)
-                    if (newTricks.isNotEmpty()) {
-                        _detectedTricks.value = _detectedTricks.value + newTricks
-                    }
+                    // Detect tricks - pass the ring buffer to detectors
+                    val newTricks = trickDetector.processSensorData(ringBuffer)
 
-                    previousSensorData = data
+                    // Detect taps - pass the ring buffer to detectors
+                    val newTaps = tapDetector.processSensorData(ringBuffer)
+
+                    // Combine and add all detected events
+                    val allEvents = newTricks + newTaps
+                    if (allEvents.isNotEmpty()) {
+                        _detectedTricks.value = _detectedTricks.value + allEvents
+                    }
                 }
             }
         }
@@ -74,6 +78,6 @@ class TrickEngine(
         _sensorHistory.value = emptyList()
         _detectedTricks.value = emptyList()
         trickDetector.reset()
-        previousSensorData = null
+        tapDetector.reset()
     }
 }

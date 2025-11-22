@@ -1,7 +1,7 @@
 package ocd.phonetricks.data
 
 data class SensorData(
-    val timestamp: Long,
+    val timestampMs: Long,
     val accelerometer: Accelerometer,
     val gyroscope: Gyroscope,
     val magnetometer: Magnetometer?,

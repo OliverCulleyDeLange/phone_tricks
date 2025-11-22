@@ -24,6 +24,24 @@ class RingBuffer<T>(private val capacity: Int) {
     }
 
     /**
+     * Get an item by index, where 0 is the oldest element and size-1 is the newest.
+     * Throws IndexOutOfBoundsException if index is out of range.
+     */
+    operator fun get(index: Int): T {
+        if (index < 0 || index >= size) {
+            throw IndexOutOfBoundsException("Index $index is out of bounds for size $size")
+        }
+
+        return if (size < capacity) {
+            // Buffer not yet full, direct access
+            buffer[index]
+        } else {
+            // Buffer is full, adjust for head position
+            buffer[(head + index) % capacity]
+        }
+    }
+
+    /**
      * Get all items in the buffer in chronological order (oldest to newest).
      */
     fun toList(): List<T> {

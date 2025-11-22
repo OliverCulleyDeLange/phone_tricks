@@ -95,7 +95,7 @@ fun SensorScreen(viewModel: SensorViewModel) {
                 sensorData?.let { data ->
                     TrickTimeline(
                         tricks = detectedTricks,
-                        currentTime = data.timestamp
+                        currentTime = data.timestampMs
                     )
                 }
 

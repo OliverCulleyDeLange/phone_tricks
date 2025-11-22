@@ -11,10 +11,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ocd.phonetricks.data.SensorData
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.abs
 
 @Composable
 fun SensorGraph(
@@ -71,6 +77,8 @@ fun SensorGraph(
                     )
                 }
             } else {
+                val textMeasurer = rememberTextMeasurer()
+
                 Canvas(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -78,7 +86,15 @@ fun SensorGraph(
                 ) {
                     val width = size.width
                     val height = size.height
+
+                    // Y-axis label area width
+                    val yAxisLabelSpace = 40f
                     val padding = 20f
+
+                    // Graph area starts after yAxisLabelSpace
+                    val graphLeft = yAxisLabelSpace + padding
+                    val graphRight = width - padding
+                    val graphWidth = graphRight - graphLeft
 
                     // Extract all values
                     val xValues = sensorHistory.map { extractX(it) }
@@ -101,8 +117,59 @@ fun SensorGraph(
 
                     // Helper function to map index to X coordinate
                     fun mapToX(index: Int): Float {
-                        return padding + (index.toFloat() / max(1, sensorHistory.size - 1)) * (width - 2 * padding)
+                        return graphLeft + (index.toFloat() / max(1, sensorHistory.size - 1)) * (graphRight - graphLeft)
                     }
+
+                    // Draw Y-axis scale (tick marks and labels)
+                    val numYTicks = 5
+                    val yTickValues = (0 until numYTicks).map { tickIdx ->
+                        adjustedMin + (tickIdx * (adjustedMax - adjustedMin) / (numYTicks - 1))
+                    }
+
+                    yTickValues.forEach { value ->
+                        val y = mapToY(value)
+                        // Draw tick
+                        drawLine(
+                            color = Color.Gray.copy(alpha = 0.3f),
+                            start = Offset(yAxisLabelSpace - 6f, y),
+                            end = Offset(yAxisLabelSpace, y),
+                            strokeWidth = 1.8f
+                        )
+                        // Draw label
+                        val rounded = (value * 100).toInt() / 100.0
+                        val label = rounded.toString()
+                        drawIntoCanvas { canvas ->
+                            val textLayoutResult = textMeasurer.measure(
+                                text = label,
+                                style = TextStyle(
+                                    fontSize = 10.sp,
+                                    color = Color.Gray
+                                )
+                            )
+
+                            val textWidth = textLayoutResult.size.width
+                            val textHeight = textLayoutResult.size.height
+
+                            canvas.save()
+                            canvas.translate(
+                                yAxisLabelSpace - 9f - textWidth,
+                                y - textHeight / 2
+                            )
+                            drawText(
+                                textLayoutResult = textLayoutResult,
+                                topLeft = Offset.Zero
+                            )
+                            canvas.restore()
+                        }
+                    }
+
+                    // Draw Y axis line itself
+                    drawLine(
+                        color = Color.Gray.copy(alpha = 0.3f),
+                        start = Offset(yAxisLabelSpace, padding),
+                        end = Offset(yAxisLabelSpace, height - padding),
+                        strokeWidth = 1.4f
+                    )
 
                     // Draw X axis line (Red)
                     if (xValues.size > 1) {
@@ -154,8 +221,8 @@ fun SensorGraph(
                         val zeroY = mapToY(0f)
                         drawLine(
                             color = Color.Gray.copy(alpha = 0.3f),
-                            start = Offset(padding, zeroY),
-                            end = Offset(width - padding, zeroY),
+                            start = Offset(graphLeft, zeroY),
+                            end = Offset(graphRight, zeroY),
                             strokeWidth = 1f
                         )
                     }

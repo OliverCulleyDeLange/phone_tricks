@@ -33,16 +33,24 @@ class TrickDetector {
     private val cooldownMs = 500L // Minimum time between same trick detections
 
     /**
-     * Process sensor data and detect tricks.
+     * Process sensor data from the ring buffer and detect tricks.
      * Returns a list of newly detected tricks.
      */
-    fun processSensorData(current: SensorData, previous: SensorData?): List<TrickEvent> {
-        if (previous == null) return emptyList()
+    fun processSensorData(sensorBuffer: RingBuffer<SensorData>): List<TrickEvent> {
+        // We need at least 2 readings to calculate delta time
+        if (sensorBuffer.size() < 2) {
+            return emptyList()
+        }
 
         val detectedTricks = mutableListOf<TrickEvent>()
 
+        // Get the last 2 sensor readings
+        val size = sensorBuffer.size()
+        val previous = sensorBuffer[size - 2]
+        val current = sensorBuffer[size - 1]
+
         // Calculate time delta in seconds
-        val deltaTime = (current.timestamp - previous.timestamp) / 1000.0
+        val deltaTime = (current.timestampMs - previous.timestampMs) / 1000.0
         if (deltaTime <= 0 || deltaTime > 0.1) return emptyList() // Ignore invalid deltas
 
         // Integrate angular velocity to get rotation angles
@@ -72,11 +80,11 @@ class TrickDetector {
 
             // Check if we've completed a full rotation (2π radians = 360 degrees)
             if (abs(accumulatedRotationZ) >= 2 * PI) {
-                val timeSinceLastSpin = current.timestamp - lastSpinTime
+                val timeSinceLastSpin = current.timestampMs - lastSpinTime
                 if (timeSinceLastSpin > cooldownMs) {
                     val confidence = calculateConfidence(abs(current.gyroscope.z), rotationThreshold)
-                    tricks.add(TrickEvent(TrickType.SPIN, current.timestamp, confidence))
-                    lastSpinTime = current.timestamp
+                    tricks.add(TrickEvent(TrickType.SPIN, current.timestampMs, confidence))
+                    lastSpinTime = current.timestampMs
                 }
                 accumulatedRotationZ = 0.0
             }
@@ -103,11 +111,11 @@ class TrickDetector {
             accumulatedRotationX += rotationX
 
             if (abs(accumulatedRotationX) >= 2 * PI) {
-                val timeSinceLastFlip = current.timestamp - lastFlipTime
+                val timeSinceLastFlip = current.timestampMs - lastFlipTime
                 if (timeSinceLastFlip > cooldownMs) {
                     val confidence = calculateConfidence(abs(current.gyroscope.x), rotationThreshold)
-                    tricks.add(TrickEvent(TrickType.FLIP, current.timestamp, confidence))
-                    lastFlipTime = current.timestamp
+                    tricks.add(TrickEvent(TrickType.FLIP, current.timestampMs, confidence))
+                    lastFlipTime = current.timestampMs
                 }
                 accumulatedRotationX = 0.0
             }
@@ -127,11 +135,11 @@ class TrickDetector {
             accumulatedRotationY += rotationY
 
             if (abs(accumulatedRotationY) >= 2 * PI) {
-                val timeSinceLastFlip = current.timestamp - lastFlipTime
+                val timeSinceLastFlip = current.timestampMs - lastFlipTime
                 if (timeSinceLastFlip > cooldownMs) {
                     val confidence = calculateConfidence(abs(current.gyroscope.y), rotationThreshold)
-                    tricks.add(TrickEvent(TrickType.FLIP, current.timestamp, confidence))
-                    lastFlipTime = current.timestamp
+                    tricks.add(TrickEvent(TrickType.FLIP, current.timestampMs, confidence))
+                    lastFlipTime = current.timestampMs
                 }
                 accumulatedRotationY = 0.0
             }
