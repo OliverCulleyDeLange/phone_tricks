@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import ocd.phonetricks.ui.components.ConfidenceGraph
 import ocd.phonetricks.ui.components.PhoneVisualization3D
 import ocd.phonetricks.ui.components.SensorGraph
 import ocd.phonetricks.ui.components.TrickTimeline
@@ -36,6 +37,7 @@ fun SensorScreen(viewModel: SensorViewModel) {
     val linearAccelerationHistory by viewModel.linearAccelerationHistory.collectAsState()
     val gravityHistory by viewModel.gravityHistory.collectAsState()
     val detectedTricks by viewModel.detectedTricks.collectAsState()
+    val confidenceHistory by viewModel.confidenceHistory.collectAsState()
 
     val scrollState = rememberScrollState()
 
@@ -95,6 +97,12 @@ fun SensorScreen(viewModel: SensorViewModel) {
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    ConfidenceGraph(
+                        confidenceHistory = confidenceHistory
+                    )
 
                     Spacer(modifier = Modifier.height(8.dp))
 

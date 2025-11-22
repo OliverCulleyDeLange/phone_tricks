@@ -5,6 +5,18 @@ import phonetricks.composeapp.generated.resources.Res
 import kotlin.math.abs
 import kotlin.math.sqrt
 
+data class InferenceResult(
+    val timestampMs: Long,
+    val predictedLabel: String,
+    val tapConfidence: Float,
+    val negativeConfidence: Float
+)
+
+data class DetectionResult(
+    val trickEvents: List<TrickEvent>,
+    val inferenceResult: InferenceResult?
+)
+
 class MLTapDetector {
     private val tapCooldownMs = 100
     private val mlConfidenceThreshold = 0.8f
@@ -38,26 +50,21 @@ class MLTapDetector {
         magnetometerBuffer: RingBuffer<Magnetometer>,
         gravityBuffer: RingBuffer<Gravity>,
         rotationVectorBuffer: RingBuffer<RotationVector>
-    ): List<TrickEvent> {
+    ): DetectionResult {
         if (!isModelLoaded || model == null) {
-            return emptyList()
+            return DetectionResult(emptyList(), null)
         }
 
         if (linearAccelerationBuffer.isEmpty()) {
-            return emptyList()
+            return DetectionResult(emptyList(), null)
         }
 
         val detectedTaps = mutableListOf<TrickEvent>()
         val current = linearAccelerationBuffer[linearAccelerationBuffer.size() - 1]
 
-        val timeSinceLastTapMs = current.timestampMs - lastTapTimeMs
-        if (timeSinceLastTapMs <= tapCooldownMs) {
-            return emptyList()
-        }
-
         val timeSinceLastInferenceMs = current.timestampMs - lastInferenceTimeMs
         if (timeSinceLastInferenceMs <= inferenceThrottleMs) {
-            return emptyList()
+            return DetectionResult(emptyList(), null)
         }
 
         try {
@@ -73,21 +80,33 @@ class MLTapDetector {
 
             lastInferenceTimeMs = current.timestampMs
 
-            val (predictedLabel, confidence) = model!!.predict(features)
+            val probabilities = model!!.predictProba(features)
+            val tapConfidence = probabilities["TAP"] ?: 0f
+            val negativeConfidence = probabilities["NEGATIVE"] ?: 0f
 
-            if (predictedLabel != "NEGATIVE" && confidence >= mlConfidenceThreshold) {
+            val (predictedLabel, _) = model!!.predict(features)
+
+            val inferenceResult = InferenceResult(
+                timestampMs = current.timestampMs,
+                predictedLabel = predictedLabel,
+                tapConfidence = tapConfidence,
+                negativeConfidence = negativeConfidence
+            )
+
+            val timeSinceLastTapMs = current.timestampMs - lastTapTimeMs
+            val canEmitTap = timeSinceLastTapMs > tapCooldownMs
+
+            if (predictedLabel != "NEGATIVE" && tapConfidence >= mlConfidenceThreshold && canEmitTap) {
                 val tapType = TrickType.TAP_FRONT
-
-                detectedTaps.add(TrickEvent(tapType, current.timestampMs, confidence))
+                detectedTaps.add(TrickEvent(tapType, current.timestampMs, tapConfidence))
                 lastTapTimeMs = current.timestampMs
-                println("Confidence: ${(confidence * 100).toInt()}%")
             }
+            return DetectionResult(detectedTaps, inferenceResult)
         } catch (e: Exception) {
             println("ML inference error: ${e.message}")
             e.printStackTrace()
+            return DetectionResult(emptyList(), null)
         }
-
-        return detectedTaps
     }
 
     fun reset() {

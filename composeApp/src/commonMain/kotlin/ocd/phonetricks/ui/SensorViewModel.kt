@@ -20,7 +20,14 @@ import ocd.phonetricks.data.TrickEvent
 import ocd.phonetricks.data.isTap
 import ocd.phonetricks.engine.TrickEngine
 import ocd.phonetricks.sensor.SensorManager
+import ocd.phonetricks.utils.currentTimeMillis
 import kotlin.math.sqrt
+
+data class ConfidenceReading(
+    val timestampMs: Long,
+    val positiveConfidence: Float,
+    val negativeConfidence: Float
+)
 
 class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
     private val engine = TrickEngine(sensorManager, viewModelScope)
@@ -65,6 +72,11 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
 
     private val _detectedTricks = MutableStateFlow<List<TrickEvent>>(emptyList())
     val detectedTricks: StateFlow<List<TrickEvent>> = _detectedTricks.asStateFlow()
+
+    private val _confidenceHistory = MutableStateFlow<List<ConfidenceReading>>(emptyList())
+    val confidenceHistory: StateFlow<List<ConfidenceReading>> = _confidenceHistory.asStateFlow()
+
+    private val maxConfidenceHistorySize = 1000
 
     fun tare() {
         val currentData = engine.getCurrentRotationVector()
@@ -135,6 +147,19 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
                 // Play sound if it's a tap
                 if (event.type.isTap()) {
                     audioManager.playTapSound()
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            engine.inferenceResults.collect { result ->
+                _confidenceHistory.value = _confidenceHistory.value + ConfidenceReading(
+                    result.timestampMs,
+                    result.tapConfidence,
+                    result.negativeConfidence
+                )
+                if (_confidenceHistory.value.size > maxConfidenceHistorySize) {
+                    _confidenceHistory.value = _confidenceHistory.value.drop(1)
                 }
             }
         }

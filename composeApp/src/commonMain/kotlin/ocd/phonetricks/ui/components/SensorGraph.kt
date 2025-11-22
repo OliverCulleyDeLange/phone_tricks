@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.max
@@ -251,5 +252,246 @@ private fun LegendItem(label: String, color: Color) {
             style = MaterialTheme.typography.labelSmall,
             color = color
         )
+    }
+}
+
+@Composable
+fun ConfidenceGraph(
+    confidenceHistory: List<ocd.phonetricks.ui.ConfidenceReading>,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "ML Confidence",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                if (confidenceHistory.isNotEmpty()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        val latest = confidenceHistory.last()
+                        val positivePercent = (latest.positiveConfidence * 100).toInt()
+                        val negativePercent = (latest.negativeConfidence * 100).toInt()
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Tap:",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "$positivePercent%",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color(0xFF4CAF50)
+                            )
+                        }
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Neg:",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "$negativePercent%",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color(0xFFEF5350)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (confidenceHistory.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Waiting for detections...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Canvas(modifier = Modifier.size(16.dp, 3.dp)) {
+                            drawRect(color = Color(0xFF4CAF50))
+                        }
+                        Text(
+                            text = "Tap Confidence",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF4CAF50)
+                        )
+                    }
+
+                    ConfidenceSubGraph(
+                        confidenceHistory = confidenceHistory,
+                        extractValue = { it.positiveConfidence },
+                        lineColor = Color(0xFF4CAF50),
+                        height = 90.dp
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Canvas(modifier = Modifier.size(16.dp, 3.dp)) {
+                            drawRect(color = Color(0xFFEF5350))
+                        }
+                        Text(
+                            text = "Negative Confidence",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFEF5350)
+                        )
+                    }
+
+                    ConfidenceSubGraph(
+                        confidenceHistory = confidenceHistory,
+                        extractValue = { it.negativeConfidence },
+                        lineColor = Color(0xFFEF5350),
+                        height = 90.dp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConfidenceSubGraph(
+    confidenceHistory: List<ocd.phonetricks.ui.ConfidenceReading>,
+    extractValue: (ocd.phonetricks.ui.ConfidenceReading) -> Float,
+    lineColor: Color,
+    height: Dp
+) {
+    val textMeasurer = rememberTextMeasurer()
+
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(height)
+    ) {
+        val width = size.width
+        val canvasHeight = size.height
+
+        val yAxisLabelSpace = 40f
+        val padding = 20f
+
+        val graphLeft = yAxisLabelSpace + padding
+        val graphRight = width - padding
+
+        val minValue = 0f
+        val maxValue = 100f
+        val valueRange = maxValue - minValue
+
+        fun mapToY(value: Float): Float {
+            return canvasHeight - padding - ((value - minValue) / valueRange) * (canvasHeight - 2 * padding)
+        }
+
+        fun mapToX(index: Int): Float {
+            return graphLeft + (index.toFloat() / max(1, confidenceHistory.size - 1)) * (graphRight - graphLeft)
+        }
+
+        val yTickValues = listOf(0f, 50f, 100f)
+        yTickValues.forEach { value ->
+            val y = mapToY(value)
+
+            drawLine(
+                color = Color.Gray.copy(alpha = 0.3f),
+                start = Offset(yAxisLabelSpace - 6f, y),
+                end = Offset(yAxisLabelSpace, y),
+                strokeWidth = 1.8f
+            )
+
+            drawLine(
+                color = Color.Gray.copy(alpha = 0.1f),
+                start = Offset(graphLeft, y),
+                end = Offset(graphRight, y),
+                strokeWidth = 1f
+            )
+
+            val label = "${value.toInt()}%"
+            drawIntoCanvas { canvas ->
+                val textLayoutResult = textMeasurer.measure(
+                    text = label,
+                    style = TextStyle(
+                        fontSize = 10.sp,
+                        color = Color.Gray
+                    )
+                )
+
+                val textWidth = textLayoutResult.size.width
+                val textHeight = textLayoutResult.size.height
+
+                canvas.save()
+                canvas.translate(
+                    yAxisLabelSpace - 9f - textWidth,
+                    y - textHeight / 2
+                )
+                drawText(
+                    textLayoutResult = textLayoutResult,
+                    topLeft = Offset.Zero
+                )
+                canvas.restore()
+            }
+        }
+
+        drawLine(
+            color = Color.Gray.copy(alpha = 0.3f),
+            start = Offset(yAxisLabelSpace, padding),
+            end = Offset(yAxisLabelSpace, canvasHeight - padding),
+            strokeWidth = 1.4f
+        )
+
+        val values = confidenceHistory.map { extractValue(it) * 100f }
+
+        if (values.size > 1) {
+            val path = Path().apply {
+                moveTo(mapToX(0), mapToY(values[0]))
+                for (i in 1 until values.size) {
+                    lineTo(mapToX(i), mapToY(values[i]))
+                }
+            }
+
+            drawPath(
+                path = path,
+                color = lineColor,
+                style = Stroke(width = 3f, cap = StrokeCap.Round)
+            )
+        }
     }
 }

@@ -30,6 +30,9 @@ class TrickEngine(
     private val _trickEvents = MutableSharedFlow<TrickEvent>()
     val trickEvents: SharedFlow<TrickEvent> = _trickEvents.asSharedFlow()
 
+    private val _inferenceResults = MutableSharedFlow<InferenceResult>()
+    val inferenceResults: SharedFlow<InferenceResult> = _inferenceResults.asSharedFlow()
+
     init {
         listenToSensors()
         scope.launch {
@@ -43,7 +46,7 @@ class TrickEngine(
             rotationVectorBuffer
         )
 
-        val newTaps = tapDetector.processSensorData(
+        val detectionResult = tapDetector.processSensorData(
             accelerometerBuffer,
             gyroscopeBuffer,
             linearAccelerationBuffer,
@@ -52,10 +55,14 @@ class TrickEngine(
             rotationVectorBuffer
         )
 
-        val allEvents = newTricks + newTaps
+        val allEvents = newTricks + detectionResult.trickEvents
         scope.launch {
             for (event in allEvents) {
                 _trickEvents.emit(event)
+            }
+
+            detectionResult.inferenceResult?.let { result ->
+                _inferenceResults.emit(result)
             }
         }
     }
