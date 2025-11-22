@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import stats
 
 
 def extract_features_from_tap(sensor_data, tap_timestamp, window_ms=100):
@@ -19,17 +20,43 @@ def extract_features_from_tap(sensor_data, tap_timestamp, window_ms=100):
             features.extend([0] * 15)
             continue
 
-        x_values = [r['x'] for r in window_data]
-        y_values = [r['y'] for r in window_data]
-        z_values = [r['z'] for r in window_data]
+        x_values = np.array([r['x'] for r in window_data])
+        y_values = np.array([r['y'] for r in window_data])
+        z_values = np.array([r['z'] for r in window_data])
+
+        magnitudes = np.sqrt(x_values ** 2 + y_values ** 2 + z_values ** 2)
+
+        jerk_x = np.diff(x_values)
+        jerk_y = np.diff(y_values)
+        jerk_z = np.diff(z_values)
+        jerk_mag = np.sqrt(jerk_x ** 2 + jerk_y ** 2 + jerk_z ** 2) if len(
+            jerk_x) > 0 else np.array([0])
 
         features.extend([
-            np.mean(x_values), np.std(x_values), np.max(x_values), np.min(x_values),
-            np.ptp(x_values),
-            np.mean(y_values), np.std(y_values), np.max(y_values), np.min(y_values),
-            np.ptp(y_values),
-            np.mean(z_values), np.std(z_values), np.max(z_values), np.min(z_values),
-            np.ptp(z_values),
+            np.std(x_values),
+            np.std(y_values),
+            np.std(z_values),
+
+            np.mean(magnitudes),
+            np.max(magnitudes),
+            np.std(magnitudes),
+
+            np.max(jerk_mag) if len(jerk_mag) > 0 else 0,
+            np.std(jerk_mag) if len(jerk_mag) > 0 else 0,
+            np.mean(jerk_mag) if len(jerk_mag) > 0 else 0,
+
+            stats.skew(magnitudes) if len(magnitudes) > 2 else 0,
+            stats.kurtosis(magnitudes) if len(magnitudes) > 3 else 0,
+
+            np.argmax(magnitudes) / len(magnitudes) if len(magnitudes) > 0 else 0,
+
+            np.sum(magnitudes ** 2),
+
+            np.sum(np.abs(np.diff(np.sign(magnitudes - np.mean(magnitudes))))) / 2 if len(
+                magnitudes) > 1 else 0,
+
+            (np.argmax(magnitudes) / len(magnitudes)) if len(magnitudes) > 0 and np.argmax(
+                magnitudes) > 0 else 0,
         ])
 
     return features
