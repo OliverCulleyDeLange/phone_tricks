@@ -27,6 +27,7 @@ fun TapCollectionScreen(viewModel: TapCollectionViewModel) {
     val savedSessionCount by viewModel.savedSessionCount.collectAsState()
     val lastSavedFile by viewModel.lastSavedFile.collectAsState()
     val isSaving by viewModel.isSaving.collectAsState()
+    val sessionTag by viewModel.sessionTag.collectAsState()
 
     Box(
         modifier = Modifier
@@ -57,12 +58,24 @@ fun TapCollectionScreen(viewModel: TapCollectionViewModel) {
         ) {
             Spacer(modifier = Modifier.height(32.dp))
 
+            if (!isRecording) {
+                TextField(
+                    value = sessionTag,
+                    onValueChange = { viewModel.updateSessionTag(it) },
+                    label = { Text("Session Tag") },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Enter session tag") },
+                    singleLine = true,
+                    enabled = !isRecording
+                )
+            }
+
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 Text(
-                    text = "Front Tap Collection",
+                    text = "Tap Collection",
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -140,8 +153,12 @@ fun TapCollectionScreen(viewModel: TapCollectionViewModel) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(72.dp),
+                        enabled = sessionTag.trim().isNotEmpty(),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
+                            containerColor = if (sessionTag.trim()
+                                    .isNotEmpty()
+                            ) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                            disabledContainerColor = MaterialTheme.colorScheme.surface
                         )
                     ) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(32.dp))

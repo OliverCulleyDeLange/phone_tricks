@@ -39,6 +39,13 @@ class TapCollectionViewModel(
     private val _isSaving = MutableStateFlow(false)
     val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
 
+    private val _sessionTag = MutableStateFlow("")
+    val sessionTag: StateFlow<String> = _sessionTag.asStateFlow()
+
+    fun updateSessionTag(tag: String) {
+        _sessionTag.value = tag
+    }
+
     fun startRecording() {
         if (_isRecording.value) return
 
@@ -89,10 +96,10 @@ class TapCollectionViewModel(
                 val tapCount = _tapTimestamps.value.size
 
                 val timestamp = currentTimeMillis()
-                val filename = "tap_collection_TAP_FRONT_${tapCount}taps_${timestamp}.json"
+                val filename = "tap_collection_${_sessionTag.value}_${tapCount}taps_${timestamp}.json"
 
                 val jsonData = engine.exportTrainingDataWithTimestamps(
-                    label = "TAP_FRONT",
+                    label = _sessionTag.value,
                     tapTimestamps = _tapTimestamps.value,
                     recordingStartMs = recordingStart,
                     recordingEndMs = recordingEnd
