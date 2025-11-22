@@ -22,7 +22,7 @@ class TrickEngine(
     private val gravityBuffer = RingBuffer<Gravity>(maxHistorySize)
 
     private val trickDetector = TrickDetector()
-    private val tapDetector = TapDetector()
+    private val tapDetector = MLTapDetector()
 
     private val trainingRecorder = TrainingDataRecorder()
 
@@ -31,6 +31,9 @@ class TrickEngine(
 
     init {
         listenToSensors()
+        scope.launch {
+            tapDetector.loadModel()
+        }
     }
 
     private fun detectEvents() {
@@ -40,7 +43,11 @@ class TrickEngine(
         )
 
         val newTaps = tapDetector.processSensorData(
+            accelerometerBuffer,
+            gyroscopeBuffer,
             linearAccelerationBuffer,
+            magnetometerBuffer,
+            gravityBuffer,
             rotationVectorBuffer
         )
 

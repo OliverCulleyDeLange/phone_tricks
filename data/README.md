@@ -56,7 +56,7 @@ This will:
 - Extract features from sensor data (200ms window around each tap)
 - Train a Random Forest classifier
 - Show accuracy metrics and feature importance
-- Save model to `models/tap_classifier.pkl`
+- Save model to `models/tap_classifier.pkl` and `models/scaler.pkl`
 
 Expected output:
 
@@ -72,7 +72,45 @@ Test samples: 50
   Test accuracy: 0.920
 ```
 
-### 5. Test the Model
+### 5. Export Model for Kotlin App
+
+```bash
+python export_model_to_kotlin.py
+```
+
+This will:
+
+- Convert the trained .pkl model to Kotlin-friendly JSON format
+- Export decision tree structures and scaler parameters
+- Automatically copy the model to `composeApp/src/commonMain/composeResources/files/`
+- The app will load this model on next build
+
+Expected output:
+
+```
+Loading model and scaler...
+Model classes: ['TAP_FRONT' 'TAP_BACK' ...]
+Number of features: 90
+Number of trees: 100
+
+✓ Model exported to: models/tap_classifier_kotlin.json
+  File size: 863.1 KB
+
+✓ Model copied to: ../composeApp/src/commonMain/composeResources/files/tap_classifier_kotlin.json
+```
+
+### 6. Rebuild the App
+
+```bash
+cd ..
+./gradlew :composeApp:assembleDebug
+```
+
+The app will now use your updated ML model for tap detection!
+
+### 7. Test the Model (Optional)
+
+Before exporting, you can test the model on specific files:
 
 ```bash
 python test_tap_model.py training_data/tap_collection_TAP_FRONT_36taps_1763840002702.json
@@ -122,6 +160,8 @@ Total: 6 sensors × 15 features = 90 features per tap
 - `visualize_taps.py` - Visualize sensor data and tap timestamps
 - `train_tap_model.py` - Train the tap classification model
 - `test_tap_model.py` - Test model on new data
+- `export_model_to_kotlin.py` - Export model to Kotlin app format
+- `convert_model_to_onnx.py` - Alternative ONNX export (optional)
 - `requirements.txt` - Python dependencies
 - `training_data/` - JSON files with tap collection sessions
 - `visualizations/` - PNG charts of sensor data
@@ -136,6 +176,7 @@ Using Random Forest Classifier:
 - Simple, fast, interpretable
 - Works well with limited data
 - No need for GPU
+- Pure Kotlin inference (no TensorFlow/ONNX needed)
 
 For production, consider:
 
@@ -143,3 +184,13 @@ For production, consider:
 - Testing with different users
 - Adding more tap types (side, edge, corner)
 - Using deep learning (LSTM/CNN) for temporal patterns
+
+## ML Integration
+
+The trained model is integrated into the app via:
+
+- **MLTapDetector** - Combines spike detection with ML classification
+- **RandomForestModel** - Pure Kotlin Random Forest inference
+- **TapFeatureExtractor** - Extracts 90 features matching training code
+
+See `../QUICK_START.md` and `ML_INTEGRATION_GUIDE.md` for details.
