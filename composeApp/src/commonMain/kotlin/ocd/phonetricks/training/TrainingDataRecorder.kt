@@ -28,6 +28,7 @@ data class TrainingSample(
  */
 @Serializable
 data class Labels(
+    val sampleType: String = "positive",
     val sessionTag: String = "",
     val surface: List<String> = emptyList(),
     val taps: List<String> = emptyList()

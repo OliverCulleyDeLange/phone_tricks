@@ -12,6 +12,7 @@ def load_training_data(json_file):
 def get_label_from_data(data):
     if 'labels' in data and isinstance(data['labels'], dict):
         labels_obj = data['labels']
+        sample_type = labels_obj.get('sampleType', 'positive')
         label_parts = []
         if labels_obj.get('sessionTag'):
             label_parts.append(labels_obj['sessionTag'])
@@ -19,7 +20,8 @@ def get_label_from_data(data):
             label_parts.extend(labels_obj['surface'])
         if labels_obj.get('taps'):
             label_parts.extend(labels_obj['taps'])
-        return '_'.join(label_parts) if label_parts else 'unlabeled'
+        base_label = '_'.join(label_parts) if label_parts else 'unlabeled'
+        return f"{base_label} [{sample_type.upper()}]"
     else:
         return data.get('label', 'unlabeled')
 

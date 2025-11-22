@@ -12,6 +12,7 @@ import ocd.phonetricks.training.BufferStats
 import ocd.phonetricks.training.SensorStats
 import ocd.phonetricks.training.FileWriter
 import ocd.phonetricks.utils.currentTimeMillis
+import ocd.phonetricks.utils.formatTimestampForFilename
 
 class TrainingDataViewModel(
     private val engine: TrickEngine,
@@ -58,14 +59,12 @@ class TrainingDataViewModel(
             _isSaving.value = true
 
             try {
-                // Generate filename with timestamp and label
                 val timestamp = currentTimeMillis()
-                val filename = "sample_${trickType.name}_${timestamp}.json"
+                val formattedTimestamp = formatTimestampForFilename(timestamp)
+                val filename = "${formattedTimestamp}_sample_${trickType.name}.json"
 
-                // Export training data
                 val jsonData = engine.exportTrainingData(trickType)
 
-                // Save to file
                 val success = fileWriter.saveFile(filename, jsonData)
 
                 if (success) {

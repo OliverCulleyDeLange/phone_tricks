@@ -21,6 +21,7 @@ def load_and_extract_features(json_files):
 
         if 'labels' in data and isinstance(data['labels'], dict):
             labels_obj = data['labels']
+            sample_type = labels_obj.get('sampleType', 'positive')
             label_parts = []
             if labels_obj.get('sessionTag'):
                 label_parts.append(labels_obj['sessionTag'])
@@ -30,11 +31,12 @@ def load_and_extract_features(json_files):
                 label_parts.extend(labels_obj['taps'])
             original_label = '_'.join(label_parts) if label_parts else 'unlabeled'
         else:
+            sample_type = 'negative' if 'negative' in json_file.name.lower() else 'positive'
             original_label = data.get('label', 'unlabeled')
 
         tap_timestamps = data['tapTimestamps']
 
-        is_negative = len(tap_timestamps) == 0 or 'negative' in json_file.name.lower()
+        is_negative = sample_type == 'negative' or len(tap_timestamps) == 0
 
         if is_negative:
             print(f"  Label: {original_label} [NEGATIVE], Extracting random windows...")
@@ -82,7 +84,6 @@ def train_model():
     if len(np.unique(y)) < 2:
         print(
             "\n⚠️  Warning: Only one class detected. Need at least 2 different tap types to train.")
-        print("   Collect data for different tap locations (TAP_FRONT, TAP_BACK, TAP_SIDE)")
         return
 
     X_train, X_test, y_train, y_test = train_test_split(

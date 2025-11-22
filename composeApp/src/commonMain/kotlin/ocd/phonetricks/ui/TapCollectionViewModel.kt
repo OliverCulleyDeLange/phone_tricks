@@ -11,6 +11,7 @@ import ocd.phonetricks.engine.TrickEngine
 import ocd.phonetricks.training.FileWriter
 import ocd.phonetricks.training.Labels
 import ocd.phonetricks.utils.currentTimeMillis
+import ocd.phonetricks.utils.formatTimestampForFilename
 
 enum class CollectionMode {
     POSITIVE,
@@ -135,18 +136,20 @@ class TapCollectionViewModel(
                 val tapCount = _tapTimestamps.value.size
 
                 val labels = Labels(
+                    sampleType = if (_collectionMode.value == CollectionMode.NEGATIVE) "negative" else "positive",
                     sessionTag = _sessionTag.value,
                     surface = _selectedSurfaceTags.value.toList(),
                     taps = _selectedTapTags.value.toList()
                 )
 
                 val timestamp = currentTimeMillis()
+                val formattedTimestamp = formatTimestampForFilename(timestamp)
                 val sessionTagPart = if (_sessionTag.value.isNotBlank()) "${_sessionTag.value}_" else ""
                 val modePrefix = if (_collectionMode.value == CollectionMode.NEGATIVE) "negative_" else ""
                 val filename = if (_collectionMode.value == CollectionMode.NEGATIVE) {
-                    "tap_collection_${modePrefix}${sessionTagPart}${timestamp}.json"
+                    "${formattedTimestamp}_tap_collection_${modePrefix}${sessionTagPart}.json"
                 } else {
-                    "tap_collection_${sessionTagPart}${tapCount}taps_${timestamp}.json"
+                    "${formattedTimestamp}_tap_collection_${sessionTagPart}${tapCount}taps.json"
                 }
 
                 val jsonData = engine.exportTrainingDataWithTimestamps(

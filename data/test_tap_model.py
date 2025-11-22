@@ -24,6 +24,7 @@ def test_model(json_file):
 
     if 'labels' in data and isinstance(data['labels'], dict):
         labels_obj = data['labels']
+        sample_type = labels_obj.get('sampleType', 'positive')
         label_parts = []
         if labels_obj.get('sessionTag'):
             label_parts.append(labels_obj['sessionTag'])
@@ -33,10 +34,11 @@ def test_model(json_file):
             label_parts.extend(labels_obj['taps'])
         actual_label = '_'.join(label_parts) if label_parts else 'unlabeled'
     else:
+        sample_type = 'negative' if 'negative' in Path(json_file).name.lower() else 'positive'
         actual_label = data.get('label', 'unlabeled')
 
     tap_timestamps = data['tapTimestamps']
-    is_negative = len(tap_timestamps) == 0 or 'negative' in Path(json_file).name.lower()
+    is_negative = sample_type == 'negative' or len(tap_timestamps) == 0
 
     if is_negative:
         print(f"Actual label: {actual_label} [NEGATIVE SAMPLE]")
