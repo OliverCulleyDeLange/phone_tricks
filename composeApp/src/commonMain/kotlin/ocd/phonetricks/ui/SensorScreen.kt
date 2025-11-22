@@ -10,8 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import ocd.phonetricks.ui.components.AxisVisualization
-import ocd.phonetricks.ui.components.PhoneAnimation
-import ocd.phonetricks.ui.components.PhoneReplayView
+import ocd.phonetricks.ui.components.PhoneVisualization3D
 import ocd.phonetricks.ui.components.SensorGraph
 import ocd.phonetricks.ui.components.TrickTimeline
 
@@ -22,6 +21,8 @@ fun SensorScreen(viewModel: SensorViewModel) {
     val detectedTricks by viewModel.detectedTricks.collectAsState()
     val isRecording by viewModel.isRecording.collectAsState()
     val isReplaying by viewModel.isReplaying.collectAsState()
+    val playbackIndex by viewModel.playbackIndexFlow.collectAsState()
+    val replaySnapshot by viewModel.replaySnapshot.collectAsState()
 
     val scrollState = rememberScrollState()
 
@@ -81,25 +82,8 @@ fun SensorScreen(viewModel: SensorViewModel) {
             }
         }
 
-        // Content - either replay view or sensor graphs
-        if (isReplaying) {
-            // Show replay animation
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(scrollState)
-                    .padding(16.dp)
-            ) {
-                PhoneReplayView(
-                    sensorHistory = sensorHistory,
-                    playbackIndexFlow = viewModel.playbackIndexFlow,
-                    onReplayComplete = {
-                        viewModel.stopReplay()
-                    }
-                )
-            }
-        } else if (sensorData != null) {
-            // Show normal sensor visualization
+        // Content - always show sensor graphs, with replay integrated into phone animation
+        if (sensorData != null || isReplaying) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -115,16 +99,20 @@ fun SensorScreen(viewModel: SensorViewModel) {
                     )
                 }
 
-                // Live Animated Phone - right after timeline!
-                sensorData?.let { data ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
+                // Live/Replay Animated Phone - integrated view
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 text = "Live Phone Motion",
@@ -132,11 +120,38 @@ fun SensorScreen(viewModel: SensorViewModel) {
                                 color = MaterialTheme.colorScheme.primary
                             )
 
-                            Spacer(modifier = Modifier.height(8.dp))
+                            // Show replay percentage when replaying
+                            if (isReplaying && replaySnapshot.isNotEmpty()) {
+                                Text(
+                                    text = "${(playbackIndex * 100f / replaySnapshot.size.coerceAtLeast(1)).toInt()}%",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
 
-                            PhoneAnimation(
+                        // Progress bar for replay
+                        if (isReplaying && replaySnapshot.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                progress = { playbackIndex.toFloat() / replaySnapshot.size.coerceAtLeast(1) },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Phone animation - shows either live data or replay data
+                        val displayData = if (isReplaying && replaySnapshot.isNotEmpty() && playbackIndex in replaySnapshot.indices) {
+                            replaySnapshot[playbackIndex]
+                        } else {
+                            sensorData
+                        }
+
+                        displayData?.let { data ->
+                            PhoneVisualization3D(
                                 rotationVector = data.rotationVector,
-                                onTareRequest = { viewModel.tare() },
+                                onTareRequest = if (!isReplaying) ({ viewModel.tare() }) else null,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(400.dp)
@@ -154,10 +169,13 @@ fun SensorScreen(viewModel: SensorViewModel) {
                     color = MaterialTheme.colorScheme.primary
                 )
 
+                // Use replay snapshot if replaying, otherwise use full history
+                val displayHistory = if (isReplaying) replaySnapshot else sensorHistory
+
                 // Accelerometer Graph
                 SensorGraph(
                     title = "Accelerometer (m/s²)",
-                    sensorHistory = sensorHistory,
+                    sensorHistory = displayHistory,
                     extractX = { it.accelerometer.x },
                     extractY = { it.accelerometer.y },
                     extractZ = { it.accelerometer.z }
@@ -166,14 +184,14 @@ fun SensorScreen(viewModel: SensorViewModel) {
                 // Gyroscope Graph
                 SensorGraph(
                     title = "Gyroscope (rad/s)",
-                    sensorHistory = sensorHistory,
+                    sensorHistory = displayHistory,
                     extractX = { it.gyroscope.x },
                     extractY = { it.gyroscope.y },
                     extractZ = { it.gyroscope.z }
                 )
 
                 // Additional Sensors Section (if any are available)
-                val hasAdditionalSensors = sensorHistory.any {
+                val hasAdditionalSensors = displayHistory.any {
                     it.magnetometer != null ||
                         it.rotationVector != null ||
                         it.linearAcceleration != null ||
@@ -189,10 +207,10 @@ fun SensorScreen(viewModel: SensorViewModel) {
                     )
 
                     // Magnetometer Graph (if available)
-                    if (sensorHistory.any { it.magnetometer != null }) {
+                    if (displayHistory.any { it.magnetometer != null }) {
                         SensorGraph(
                             title = "Magnetometer (µT)",
-                            sensorHistory = sensorHistory.filter { it.magnetometer != null },
+                            sensorHistory = displayHistory.filter { it.magnetometer != null },
                             extractX = { it.magnetometer!!.x },
                             extractY = { it.magnetometer!!.y },
                             extractZ = { it.magnetometer!!.z }
@@ -200,10 +218,10 @@ fun SensorScreen(viewModel: SensorViewModel) {
                     }
 
                     // Linear Acceleration Graph (if available)
-                    if (sensorHistory.any { it.linearAcceleration != null }) {
+                    if (displayHistory.any { it.linearAcceleration != null }) {
                         SensorGraph(
                             title = "Linear Acceleration (m/s²)",
-                            sensorHistory = sensorHistory.filter { it.linearAcceleration != null },
+                            sensorHistory = displayHistory.filter { it.linearAcceleration != null },
                             extractX = { it.linearAcceleration!!.x },
                             extractY = { it.linearAcceleration!!.y },
                             extractZ = { it.linearAcceleration!!.z }
@@ -211,10 +229,10 @@ fun SensorScreen(viewModel: SensorViewModel) {
                     }
 
                     // Gravity Graph (if available)
-                    if (sensorHistory.any { it.gravity != null }) {
+                    if (displayHistory.any { it.gravity != null }) {
                         SensorGraph(
                             title = "Gravity (m/s²)",
-                            sensorHistory = sensorHistory.filter { it.gravity != null },
+                            sensorHistory = displayHistory.filter { it.gravity != null },
                             extractX = { it.gravity!!.x },
                             extractY = { it.gravity!!.y },
                             extractZ = { it.gravity!!.z }
@@ -222,10 +240,10 @@ fun SensorScreen(viewModel: SensorViewModel) {
                     }
 
                     // Rotation Vector Graph (if available)
-                    if (sensorHistory.any { it.rotationVector != null }) {
+                    if (displayHistory.any { it.rotationVector != null }) {
                         SensorGraph(
                             title = "Rotation Vector (Quaternion)",
-                            sensorHistory = sensorHistory.filter { it.rotationVector != null },
+                            sensorHistory = displayHistory.filter { it.rotationVector != null },
                             extractX = { it.rotationVector!!.x },
                             extractY = { it.rotationVector!!.y },
                             extractZ = { it.rotationVector!!.z }

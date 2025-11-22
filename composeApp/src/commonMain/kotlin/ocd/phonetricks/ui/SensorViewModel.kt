@@ -54,6 +54,10 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
     private val _playbackIndex = MutableStateFlow(0)
     val playbackIndexFlow: StateFlow<Int> = _playbackIndex.asStateFlow()
 
+    // Store the replay snapshot (last 10 seconds)
+    private val _replaySnapshot = MutableStateFlow<List<SensorData>>(emptyList())
+    val replaySnapshot: StateFlow<List<SensorData>> = _replaySnapshot.asStateFlow()
+
     fun startRecording() {
         engine.startRecording()
         _isReplaying.value = false
@@ -65,13 +69,23 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
 
     fun startReplay() {
         engine.stopRecording() // Pause sensor collection during replay
-        _isReplaying.value = true
-        // reset playback index
+
+        // Get the last 10 seconds of data
+        val history = sensorHistory.value
+        if (history.isEmpty()) return
+
+        val currentTime = history.last().timestamp
+        val tenSecondsAgo = currentTime - 10_000_000_000L // 10 seconds in nanoseconds
+        val last10Seconds = history.filter { it.timestamp >= tenSecondsAgo }
+
+        _replaySnapshot.value = last10Seconds
         _playbackIndex.value = 0
+        _isReplaying.value = true
     }
 
     fun stopReplay() {
         _isReplaying.value = false
+        _replaySnapshot.value = emptyList()
         engine.startRecording() // Resume sensor collection
     }
 
@@ -143,7 +157,7 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
             _isReplaying.collect { replaying ->
                 if (replaying) {
                     // Snapshot history at start of replay
-                    val history = sensorHistory.value
+                    val history = _replaySnapshot.value
                     if (history.isEmpty()) return@collect
 
                     var idx = 0
