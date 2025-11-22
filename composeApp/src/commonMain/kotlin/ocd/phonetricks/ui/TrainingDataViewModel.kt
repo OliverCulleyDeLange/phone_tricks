@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import ocd.phonetricks.data.TrickType
 import ocd.phonetricks.engine.TrickEngine
 import ocd.phonetricks.training.BufferStats
+import ocd.phonetricks.training.SensorStats
 import ocd.phonetricks.training.FileWriter
 import ocd.phonetricks.utils.currentTimeMillis
 
@@ -17,7 +18,17 @@ class TrainingDataViewModel(
     private val fileWriter: FileWriter
 ) : ViewModel() {
 
-    private val _bufferStats = MutableStateFlow(BufferStats(0, 0, 0f))
+    private val emptySensorStats = SensorStats(0, 0, 0f)
+    private val emptyBufferStats = BufferStats(
+        accelerometer = emptySensorStats,
+        gyroscope = emptySensorStats,
+        magnetometer = emptySensorStats,
+        rotationVector = emptySensorStats,
+        linearAcceleration = emptySensorStats,
+        gravity = emptySensorStats
+    )
+
+    private val _bufferStats = MutableStateFlow(emptyBufferStats)
     val bufferStats: StateFlow<BufferStats> = _bufferStats.asStateFlow()
 
     private val _saveDirectory = MutableStateFlow(fileWriter.getSaveDirectory())
@@ -75,6 +86,6 @@ class TrainingDataViewModel(
 
     fun clearBuffer() {
         engine.clearHistory()
-        _bufferStats.value = BufferStats(0, 0, 0f)
+        _bufferStats.value = emptyBufferStats
     }
 }

@@ -17,18 +17,17 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import ocd.phonetricks.data.SensorData
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.abs
 
 @Composable
-fun SensorGraph(
+fun <T> SensorGraph(
     title: String,
-    sensorHistory: List<SensorData>,
-    extractX: (SensorData) -> Float,
-    extractY: (SensorData) -> Float,
-    extractZ: (SensorData) -> Float,
+    sensorHistory: List<T>,
+    extractX: (T) -> Float,
+    extractY: (T) -> Float,
+    extractZ: (T) -> Float,
     modifier: Modifier = Modifier
 ) {
     Card(

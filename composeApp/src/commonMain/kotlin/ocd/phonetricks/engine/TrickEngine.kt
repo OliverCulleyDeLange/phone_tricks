@@ -11,19 +11,22 @@ import kotlinx.coroutines.launch
 import ocd.phonetricks.data.*
 import ocd.phonetricks.sensor.SensorManager
 import ocd.phonetricks.training.TrainingDataRecorder
+import ocd.phonetricks.utils.currentTimeMillis
 
 class TrickEngine(
     private val sensorManager: SensorManager,
     private val scope: CoroutineScope
 ) {
-    private val _currentSensorData = MutableStateFlow<SensorData?>(null)
-    val currentSensorData: StateFlow<SensorData?> = _currentSensorData.asStateFlow()
+    private val maxHistorySize = 1000
+    private val accelerometerBuffer = RingBuffer<AccelerometerReading>(maxHistorySize)
+    private val gyroscopeBuffer = RingBuffer<GyroscopeReading>(maxHistorySize)
+    private val magnetometerBuffer = RingBuffer<MagnetometerReading>(maxHistorySize)
+    private val rotationVectorBuffer = RingBuffer<RotationVectorReading>(maxHistorySize)
+    private val linearAccelerationBuffer = RingBuffer<LinearAccelerationReading>(maxHistorySize)
+    private val gravityBuffer = RingBuffer<GravityReading>(maxHistorySize)
 
-    private val maxHistorySize = 1000 // Arbitrary number of sensor data samples
-    private val ringBuffer = RingBuffer<SensorData>(maxHistorySize)
-
-    private val _sensorHistory = MutableStateFlow<List<SensorData>>(emptyList())
-    val sensorHistory: StateFlow<List<SensorData>> = _sensorHistory.asStateFlow()
+    private val _bufferUpdate = MutableStateFlow(0L)
+    val bufferUpdate: StateFlow<Long> = _bufferUpdate.asStateFlow()
 
     private val trickDetector = TrickDetector()
     private val tapDetector = TapDetector()
@@ -33,89 +36,25 @@ class TrickEngine(
     private val _trickEvents = MutableSharedFlow<TrickEvent>()
     val trickEvents: SharedFlow<TrickEvent> = _trickEvents.asSharedFlow()
 
-    private var latestAccelerometer: Accelerometer = Accelerometer(0f, 0f, 0f)
-    private var latestGyroscope: Gyroscope = Gyroscope(0f, 0f, 0f)
-    private var latestMagnetometer: Magnetometer? = null
-    private var latestRotationVector: RotationVector = RotationVector(0f, 0f, 0f, null)
-    private var latestLinearAcceleration: LinearAcceleration? = null
-    private var latestGravity: Gravity? = null
-
     init {
-        scope.launch {
-            sensorManager.accelerometerFlow.collect { reading ->
-                latestAccelerometer = reading.data
-                updateSensorData(reading.timestampMs)
-            }
-        }
-
-        scope.launch {
-            sensorManager.gyroscopeFlow.collect { reading ->
-                latestGyroscope = reading.data
-                updateSensorData(reading.timestampMs)
-            }
-        }
-
-        sensorManager.magnetometerFlow?.let { flow ->
-            scope.launch {
-                flow.collect { reading ->
-                    latestMagnetometer = reading.data
-                    updateSensorData(reading.timestampMs)
-                }
-            }
-        }
-
-        scope.launch {
-            sensorManager.rotationVectorFlow.collect { reading ->
-                latestRotationVector = reading.data
-                updateSensorData(reading.timestampMs)
-            }
-        }
-
-        sensorManager.linearAccelerationFlow?.let { flow ->
-            scope.launch {
-                flow.collect { reading ->
-                    latestLinearAcceleration = reading.data
-                    updateSensorData(reading.timestampMs)
-                }
-            }
-        }
-
-        sensorManager.gravityFlow?.let { flow ->
-            scope.launch {
-                flow.collect { reading ->
-                    latestGravity = reading.data
-                    updateSensorData(reading.timestampMs)
-                }
-            }
-        }
+        listenToSensors()
     }
 
-    private fun updateSensorData(timestampMs: Long) {
-        val data = SensorData(
-            timestampMs = timestampMs,
-            accelerometer = latestAccelerometer,
-            gyroscope = latestGyroscope,
-            magnetometer = latestMagnetometer,
-            rotationVector = latestRotationVector,
-            linearAcceleration = latestLinearAcceleration,
-            gravity = latestGravity
+    private fun notifyBufferUpdate() {
+        _bufferUpdate.value = currentTimeMillis()
+    }
+
+    private fun detectTricks() {
+        val newTricks = trickDetector.processSensorData(
+            gyroscopeBuffer,
+            rotationVectorBuffer
         )
 
-        _currentSensorData.value = data
+        val newTaps = tapDetector.processSensorData(
+            linearAccelerationBuffer,
+            rotationVectorBuffer
+        )
 
-        // Add to ring buffer (automatically handles overflow)
-        ringBuffer.add(data)
-
-        // Update the state flow with the current buffer contents
-        _sensorHistory.value = ringBuffer.toList()
-
-        // Detect tricks - pass the ring buffer to detectors
-        val newTricks = trickDetector.processSensorData(ringBuffer)
-
-        // Detect taps - pass the ring buffer to detectors
-        val newTaps = tapDetector.processSensorData(ringBuffer)
-
-        // Combine and emit all detected events
         val allEvents = newTricks + newTaps
         scope.launch {
             for (event in allEvents) {
@@ -125,39 +64,116 @@ class TrickEngine(
     }
 
     fun clearHistory() {
-        ringBuffer.clear()
-        _sensorHistory.value = emptyList()
+        accelerometerBuffer.clear()
+        gyroscopeBuffer.clear()
+        magnetometerBuffer.clear()
+        rotationVectorBuffer.clear()
+        linearAccelerationBuffer.clear()
+        gravityBuffer.clear()
+
+        notifyBufferUpdate()
+
         trickDetector.reset()
         tapDetector.reset()
     }
 
-    /**
-     * Export the current sensor buffer as a JSON string for training purposes.
-     *
-     * @param label The label to assign to this training sample
-     * @return JSON string representation of the training data
-     */
     fun exportTrainingData(label: TrickType): String {
-        return trainingRecorder.serializeToJson(ringBuffer, label)
+        return trainingRecorder.serializeToJson(
+            accelerometerBuffer,
+            gyroscopeBuffer,
+            magnetometerBuffer,
+            rotationVectorBuffer,
+            linearAccelerationBuffer,
+            gravityBuffer,
+            label
+        )
     }
 
-    /**
-     * Export the current sensor buffer as a JSON string with a custom label.
-     *
-     * @param labelString Custom label string
-     * @return JSON string representation of the training data
-     */
-    fun exportTrainingData(labelString: String): String {
-        return trainingRecorder.serializeToJson(ringBuffer, labelString)
+    fun getBufferStats() = trainingRecorder.getBufferStats(
+        accelerometerBuffer,
+        gyroscopeBuffer,
+        magnetometerBuffer,
+        rotationVectorBuffer,
+        linearAccelerationBuffer,
+        gravityBuffer
+    )
+
+    fun getCurrentAccelerometer(): AccelerometerReading? =
+        if (accelerometerBuffer.isEmpty()) null else accelerometerBuffer[accelerometerBuffer.size() - 1]
+
+    fun getCurrentGyroscope(): GyroscopeReading? =
+        if (gyroscopeBuffer.isEmpty()) null else gyroscopeBuffer[gyroscopeBuffer.size() - 1]
+
+    fun getCurrentMagnetometer(): MagnetometerReading? =
+        if (magnetometerBuffer.isEmpty()) null else magnetometerBuffer[magnetometerBuffer.size() - 1]
+
+    fun getCurrentRotationVector(): RotationVectorReading? =
+        if (rotationVectorBuffer.isEmpty()) null else rotationVectorBuffer[rotationVectorBuffer.size() - 1]
+
+    fun getCurrentLinearAcceleration(): LinearAccelerationReading? =
+        if (linearAccelerationBuffer.isEmpty()) null else linearAccelerationBuffer[linearAccelerationBuffer.size() - 1]
+
+    fun getCurrentGravity(): GravityReading? =
+        if (gravityBuffer.isEmpty()) null else gravityBuffer[gravityBuffer.size() - 1]
+
+    fun getAccelerometerHistory(): List<AccelerometerReading> = accelerometerBuffer.toList()
+
+    fun getGyroscopeHistory(): List<GyroscopeReading> = gyroscopeBuffer.toList()
+    fun getMagnetometerHistory(): List<MagnetometerReading> = magnetometerBuffer.toList()
+    fun getRotationVectorHistory(): List<RotationVectorReading> = rotationVectorBuffer.toList()
+    fun getLinearAccelerationHistory(): List<LinearAccelerationReading> = linearAccelerationBuffer.toList()
+    fun getGravityHistory(): List<GravityReading> = gravityBuffer.toList()
+
+    private fun listenToSensors() {
+        scope.launch {
+            sensorManager.accelerometerFlow.collect { reading ->
+                accelerometerBuffer.add(reading)
+                notifyBufferUpdate()
+                detectTricks()
+            }
+        }
+
+        scope.launch {
+            sensorManager.gyroscopeFlow.collect { reading ->
+                gyroscopeBuffer.add(reading)
+                notifyBufferUpdate()
+                detectTricks()
+            }
+        }
+
+        sensorManager.magnetometerFlow?.let { flow ->
+            scope.launch {
+                flow.collect { reading ->
+                    magnetometerBuffer.add(reading)
+                    notifyBufferUpdate()
+                }
+            }
+        }
+
+        scope.launch {
+            sensorManager.rotationVectorFlow.collect { reading ->
+                rotationVectorBuffer.add(reading)
+                notifyBufferUpdate()
+            }
+        }
+
+        sensorManager.linearAccelerationFlow?.let { flow ->
+            scope.launch {
+                flow.collect { reading ->
+                    linearAccelerationBuffer.add(reading)
+                    notifyBufferUpdate()
+                    detectTricks()
+                }
+            }
+        }
+
+        sensorManager.gravityFlow?.let { flow ->
+            scope.launch {
+                flow.collect { reading ->
+                    gravityBuffer.add(reading)
+                    notifyBufferUpdate()
+                }
+            }
+        }
     }
-
-    /**
-     * Get statistics about the current sensor buffer.
-     */
-    fun getBufferStats() = trainingRecorder.getBufferStats(ringBuffer)
-
-    /**
-     * Get direct access to the ring buffer for advanced use cases.
-     */
-    fun getSensorBuffer(): RingBuffer<SensorData> = ringBuffer
 }

@@ -1,6 +1,7 @@
 package ocd.phonetricks.engine
 
-import ocd.phonetricks.data.SensorData
+import ocd.phonetricks.data.GyroscopeReading
+import ocd.phonetricks.data.RotationVectorReading
 import ocd.phonetricks.data.TrickEvent
 import ocd.phonetricks.data.TrickType
 import kotlin.math.abs
@@ -36,27 +37,30 @@ class TrickDetector {
      * Process sensor data from the ring buffer and detect tricks.
      * Returns a list of newly detected tricks.
      */
-    fun processSensorData(sensorBuffer: RingBuffer<SensorData>): List<TrickEvent> {
+    fun processSensorData(
+        gyroscopeBuffer: RingBuffer<GyroscopeReading>,
+        rotationVectorBuffer: RingBuffer<RotationVectorReading>
+    ): List<TrickEvent> {
         // We need at least 2 readings to calculate delta time
-        if (sensorBuffer.size() < 2) {
+        if (gyroscopeBuffer.size() < 2) {
             return emptyList()
         }
 
         val detectedTricks = mutableListOf<TrickEvent>()
 
         // Get the last 2 sensor readings
-        val size = sensorBuffer.size()
-        val previous = sensorBuffer[size - 2]
-        val current = sensorBuffer[size - 1]
+        val size = gyroscopeBuffer.size()
+        val previous = gyroscopeBuffer[size - 2]
+        val current = gyroscopeBuffer[size - 1]
 
         // Calculate time delta in seconds
         val deltaTime = (current.timestampMs - previous.timestampMs) / 1000.0
         if (deltaTime <= 0 || deltaTime > 0.1) return emptyList() // Ignore invalid deltas
 
         // Integrate angular velocity to get rotation angles
-        val rotationZ = current.gyroscope.z * deltaTime
-        val rotationX = current.gyroscope.x * deltaTime
-        val rotationY = current.gyroscope.y * deltaTime
+        val rotationZ = current.data.z * deltaTime
+        val rotationX = current.data.x * deltaTime
+        val rotationY = current.data.y * deltaTime
 
         // Detect SPIN (Z-axis rotation)
         detectedTricks.addAll(detectSpin(current, rotationZ))
@@ -67,11 +71,11 @@ class TrickDetector {
         return detectedTricks
     }
 
-    private fun detectSpin(current: SensorData, rotationZ: Double): List<TrickEvent> {
+    private fun detectSpin(current: GyroscopeReading, rotationZ: Double): List<TrickEvent> {
         val tricks = mutableListOf<TrickEvent>()
 
         // Check if Z-axis is spinning fast enough
-        if (abs(current.gyroscope.z) > rotationThreshold) {
+        if (abs(current.data.z) > rotationThreshold) {
             if (!isInSpin) {
                 isInSpin = true
                 accumulatedRotationZ = 0.0
@@ -82,7 +86,7 @@ class TrickDetector {
             if (abs(accumulatedRotationZ) >= 2 * PI) {
                 val timeSinceLastSpin = current.timestampMs - lastSpinTime
                 if (timeSinceLastSpin > cooldownMs) {
-                    val confidence = calculateConfidence(abs(current.gyroscope.z), rotationThreshold)
+                    val confidence = calculateConfidence(abs(current.data.z), rotationThreshold)
                     tricks.add(TrickEvent(TrickType.SPIN, current.timestampMs, confidence))
                     lastSpinTime = current.timestampMs
                 }
@@ -90,7 +94,7 @@ class TrickDetector {
             }
         } else {
             // Reset if rotation slows down
-            if (isInSpin && abs(current.gyroscope.z) < rotationThreshold * 0.5f) {
+            if (isInSpin && abs(current.data.z) < rotationThreshold * 0.5f) {
                 isInSpin = false
                 accumulatedRotationZ = 0.0
             }
@@ -99,11 +103,11 @@ class TrickDetector {
         return tricks
     }
 
-    private fun detectFlip(current: SensorData, rotationX: Double, rotationY: Double): List<TrickEvent> {
+    private fun detectFlip(current: GyroscopeReading, rotationX: Double, rotationY: Double): List<TrickEvent> {
         val tricks = mutableListOf<TrickEvent>()
 
         // Check X-axis flip
-        if (abs(current.gyroscope.x) > rotationThreshold) {
+        if (abs(current.data.x) > rotationThreshold) {
             if (!isInFlipX) {
                 isInFlipX = true
                 accumulatedRotationX = 0.0
@@ -113,21 +117,21 @@ class TrickDetector {
             if (abs(accumulatedRotationX) >= 2 * PI) {
                 val timeSinceLastFlip = current.timestampMs - lastFlipTime
                 if (timeSinceLastFlip > cooldownMs) {
-                    val confidence = calculateConfidence(abs(current.gyroscope.x), rotationThreshold)
+                    val confidence = calculateConfidence(abs(current.data.x), rotationThreshold)
                     tricks.add(TrickEvent(TrickType.FLIP, current.timestampMs, confidence))
                     lastFlipTime = current.timestampMs
                 }
                 accumulatedRotationX = 0.0
             }
         } else {
-            if (isInFlipX && abs(current.gyroscope.x) < rotationThreshold * 0.5f) {
+            if (isInFlipX && abs(current.data.x) < rotationThreshold * 0.5f) {
                 isInFlipX = false
                 accumulatedRotationX = 0.0
             }
         }
 
         // Check Y-axis flip
-        if (abs(current.gyroscope.y) > rotationThreshold) {
+        if (abs(current.data.y) > rotationThreshold) {
             if (!isInFlipY) {
                 isInFlipY = true
                 accumulatedRotationY = 0.0
@@ -137,14 +141,14 @@ class TrickDetector {
             if (abs(accumulatedRotationY) >= 2 * PI) {
                 val timeSinceLastFlip = current.timestampMs - lastFlipTime
                 if (timeSinceLastFlip > cooldownMs) {
-                    val confidence = calculateConfidence(abs(current.gyroscope.y), rotationThreshold)
+                    val confidence = calculateConfidence(abs(current.data.y), rotationThreshold)
                     tricks.add(TrickEvent(TrickType.FLIP, current.timestampMs, confidence))
                     lastFlipTime = current.timestampMs
                 }
                 accumulatedRotationY = 0.0
             }
         } else {
-            if (isInFlipY && abs(current.gyroscope.y) < rotationThreshold * 0.5f) {
+            if (isInFlipY && abs(current.data.y) < rotationThreshold * 0.5f) {
                 isInFlipY = false
                 accumulatedRotationY = 0.0
             }

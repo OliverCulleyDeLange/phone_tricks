@@ -1,6 +1,7 @@
 package ocd.phonetricks.engine
 
-import ocd.phonetricks.data.SensorData
+import ocd.phonetricks.data.LinearAccelerationReading
+import ocd.phonetricks.data.RotationVectorReading
 import ocd.phonetricks.data.TrickEvent
 import ocd.phonetricks.data.TrickType
 import kotlin.math.abs
@@ -29,33 +30,27 @@ class TapDetector {
      * Process sensor data from the ring buffer and detect taps.
      * Returns a list of newly detected tap events.
      */
-    fun processSensorData(sensorBuffer: RingBuffer<SensorData>): List<TrickEvent> {
+    fun processSensorData(
+        linearAccelerationBuffer: RingBuffer<LinearAccelerationReading>,
+        rotationVectorBuffer: RingBuffer<RotationVectorReading>
+    ): List<TrickEvent> {
         // We need at least 3 readings to detect a spike pattern
-        if (sensorBuffer.size() < 3) {
+        if (linearAccelerationBuffer.size() < 3) {
             return emptyList()
         }
 
         val detectedTaps = mutableListOf<TrickEvent>()
 
         // Get the last 3 sensor readings
-        val size = sensorBuffer.size()
-        val previousPrevious = sensorBuffer[size - 3]
-        val previous = sensorBuffer[size - 2]
-        val current = sensorBuffer[size - 1]
+        val size = linearAccelerationBuffer.size()
+        val previousPrevious = linearAccelerationBuffer[size - 3]
+        val previous = linearAccelerationBuffer[size - 2]
+        val current = linearAccelerationBuffer[size - 1]
 
         // Calculate magnitudes for each reading
-        val prevPrevLinearAccel = previousPrevious.linearAcceleration
-        val prevLinearAccel = previous.linearAcceleration
-        val currentLinearAccel = current.linearAcceleration
-
-        // All three must have linear acceleration data
-        if (prevPrevLinearAccel == null || prevLinearAccel == null || currentLinearAccel == null) {
-            return emptyList()
-        }
-
-        val prevPrevMagnitude = calculateMagnitude(prevPrevLinearAccel.x, prevPrevLinearAccel.y, prevPrevLinearAccel.z)
-        val prevMagnitude = calculateMagnitude(prevLinearAccel.x, prevLinearAccel.y, prevLinearAccel.z)
-        val currentMagnitude = calculateMagnitude(currentLinearAccel.x, currentLinearAccel.y, currentLinearAccel.z)
+        val prevPrevMagnitude = calculateMagnitude(previousPrevious.data.x, previousPrevious.data.y, previousPrevious.data.z)
+        val prevMagnitude = calculateMagnitude(previous.data.x, previous.data.y, previous.data.z)
+        val currentMagnitude = calculateMagnitude(current.data.x, current.data.y, current.data.z)
 
         // Check for spike pattern:
         // 1. Previous-previous was below threshold
@@ -71,20 +66,47 @@ class TapDetector {
             val timeSinceLastTapMs = current.timestampMs - lastTapTimeMs
             if (timeSinceLastTapMs > tapCooldownMs) {
                 // Use the peak (previous) data to determine tap surface
-                val tapType = determineTapSurface(
-                    previous,
-                    prevLinearAccel.x,
-                    prevLinearAccel.y,
-                    prevLinearAccel.z
-                )
-                val confidence = calculateConfidence(prevMagnitude)
-                detectedTaps.add(TrickEvent(tapType, current.timestampMs, confidence))
-                println("Added tap event: $tapType, confidence: $confidence, magnitudes: $prevPrevMagnitude, $prevMagnitude, $currentMagnitude")
-                lastTapTimeMs = current.timestampMs
+                val rotationVector = findClosestRotationVector(rotationVectorBuffer, previous.timestampMs)
+                if (rotationVector != null) {
+                    val tapType = determineTapSurface(
+                        rotationVector,
+                        previous.data.x,
+                        previous.data.y,
+                        previous.data.z
+                    )
+                    val confidence = calculateConfidence(prevMagnitude)
+                    detectedTaps.add(TrickEvent(tapType, current.timestampMs, confidence))
+                    println("Added tap event: $tapType, confidence: $confidence, magnitudes: $prevPrevMagnitude, $prevMagnitude, $currentMagnitude")
+                    lastTapTimeMs = current.timestampMs
+                }
             }
         }
 
         return detectedTaps
+    }
+
+    /**
+     * Find the closest rotation vector to a given timestamp.
+     */
+    private fun findClosestRotationVector(
+        rotationVectorBuffer: RingBuffer<RotationVectorReading>,
+        timestampMs: Long
+    ): RotationVectorReading? {
+        if (rotationVectorBuffer.isEmpty()) return null
+
+        var closest: RotationVectorReading? = null
+        var minDiff = Long.MAX_VALUE
+
+        for (i in 0 until rotationVectorBuffer.size()) {
+            val reading = rotationVectorBuffer[i]
+            val diff = abs(reading.timestampMs - timestampMs)
+            if (diff < minDiff) {
+                minDiff = diff
+                closest = reading
+            }
+        }
+
+        return closest
     }
 
     /**
@@ -97,9 +119,14 @@ class TapDetector {
     /**
      * Determine which surface was tapped based on acceleration direction and device orientation.
      */
-    private fun determineTapSurface(sensorData: SensorData, accelX: Float, accelY: Float, accelZ: Float): TrickType {
+    private fun determineTapSurface(
+        rotationVectorReading: RotationVectorReading,
+        accelX: Float,
+        accelY: Float,
+        accelZ: Float
+    ): TrickType {
         // Get the rotation vector (quaternion)
-        val rv = sensorData.rotationVector
+        val rv = rotationVectorReading.data
         val qx = rv.x
         val qy = rv.y
         val qz = rv.z

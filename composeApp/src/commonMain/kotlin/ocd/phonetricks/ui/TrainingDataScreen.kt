@@ -13,6 +13,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ocd.phonetricks.data.TrickType
 import ocd.phonetricks.training.BufferStats
+import ocd.phonetricks.training.SensorStats
 
 @Composable
 fun TrainingDataScreen(viewModel: TrainingDataViewModel) {
@@ -88,7 +89,7 @@ fun TrainingDataScreen(viewModel: TrainingDataViewModel) {
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
                     text = "Buffer Status",
@@ -96,47 +97,14 @@ fun TrainingDataScreen(viewModel: TrainingDataViewModel) {
                     fontWeight = FontWeight.Bold
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Text(
-                            text = "Sample Count",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "${bufferStats.sampleCount}",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Column {
-                        Text(
-                            text = "Duration",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "${bufferStats.durationMs / 1000.0}s",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Column {
-                        Text(
-                            text = "Sample Rate",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "${(bufferStats.sampleRate * 10).toInt() / 10.0} Hz",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
+                SensorStatsRow("Accelerometer", bufferStats.accelerometer)
+                SensorStatsRow("Gyroscope", bufferStats.gyroscope)
+                SensorStatsRow("Magnetometer", bufferStats.magnetometer)
+                SensorStatsRow("Rotation Vector", bufferStats.rotationVector)
+                SensorStatsRow("Linear Accel", bufferStats.linearAcceleration)
+                SensorStatsRow("Gravity", bufferStats.gravity)
+
+                Divider()
 
                 Text(
                     text = "Samples saved: $saveCount",
@@ -262,6 +230,33 @@ fun TrainingDataScreen(viewModel: TrainingDataViewModel) {
             Spacer(modifier = Modifier.width(8.dp))
             Text("Clear Buffer")
         }
+    }
+}
+
+@Composable
+fun SensorStatsRow(sensorName: String, stats: SensorStats) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = sensorName,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = "${stats.sampleCount} samples",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = "${(stats.sampleRate * 10).toInt() / 10.0} Hz",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

@@ -12,10 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ocd.phonetricks.audio.createAudioManager
-import ocd.phonetricks.data.SensorData
-import ocd.phonetricks.data.TrickEvent
-import ocd.phonetricks.data.RotationVector
-import ocd.phonetricks.data.isTap
+import ocd.phonetricks.data.*
 import ocd.phonetricks.engine.TrickEngine
 import ocd.phonetricks.sensor.SensorManager
 import kotlin.math.sqrt
@@ -27,68 +24,77 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
     // Tare quaternion - stores the offset rotation to align the model with the device
     private val _tareQuaternion = MutableStateFlow<RotationVector?>(null)
 
-    // Fast updates for visualization (60Hz) - with tare applied
-    val sensorData: StateFlow<SensorData?> = engine.currentSensorData.map { data ->
-        data?.let { applyTare(it, _tareQuaternion.value) }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, engine.currentSensorData.value)
+    val accelerometerData: StateFlow<AccelerometerReading?> = engine.bufferUpdate.map {
+        engine.getCurrentAccelerometer()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    // Sensor history for graphs - with tare applied
-    val sensorHistory: StateFlow<List<SensorData>> = combine(
-        engine.sensorHistory,
-        _tareQuaternion
-    ) { history, tare ->
+    val gyroscopeData: StateFlow<GyroscopeReading?> = engine.bufferUpdate.map {
+        engine.getCurrentGyroscope()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    val magnetometerData: StateFlow<MagnetometerReading?> = engine.bufferUpdate.map {
+        engine.getCurrentMagnetometer()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    val rotationVectorData: StateFlow<RotationVectorReading?> = engine.bufferUpdate.map {
+        engine.getCurrentRotationVector()?.let { reading -> applyTare(reading, _tareQuaternion.value) }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    val linearAccelerationData: StateFlow<LinearAccelerationReading?> = engine.bufferUpdate.map {
+        engine.getCurrentLinearAcceleration()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    val gravityData: StateFlow<GravityReading?> = engine.bufferUpdate.map {
+        engine.getCurrentGravity()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    val accelerometerHistory: StateFlow<List<AccelerometerReading>> = engine.bufferUpdate.map {
+        engine.getAccelerometerHistory()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val gyroscopeHistory: StateFlow<List<GyroscopeReading>> = engine.bufferUpdate.map {
+        engine.getGyroscopeHistory()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val magnetometerHistory: StateFlow<List<MagnetometerReading>> = engine.bufferUpdate.map {
+        engine.getMagnetometerHistory()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val rotationVectorHistory: StateFlow<List<RotationVectorReading>> = engine.bufferUpdate.map {
+        val history = engine.getRotationVectorHistory()
+        val tare = _tareQuaternion.value
         if (tare == null) {
             history
         } else {
-            history.map { data -> applyTare(data, tare) }
+            history.map { reading -> applyTare(reading, tare) }
         }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, engine.sensorHistory.value)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val linearAccelerationHistory: StateFlow<List<LinearAccelerationReading>> = engine.bufferUpdate.map {
+        engine.getLinearAccelerationHistory()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val gravityHistory: StateFlow<List<GravityReading>> = engine.bufferUpdate.map {
+        engine.getGravityHistory()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _detectedTricks = MutableStateFlow<List<TrickEvent>>(emptyList())
     val detectedTricks: StateFlow<List<TrickEvent>> = _detectedTricks.asStateFlow()
 
-    private val _isReplaying = MutableStateFlow(false)
-    val isReplaying: StateFlow<Boolean> = _isReplaying.asStateFlow()
-
-    private val _playbackIndex = MutableStateFlow(0)
-    val playbackIndexFlow: StateFlow<Int> = _playbackIndex.asStateFlow()
-
-    // Store the replay snapshot (last 10 seconds)
-    private val _replaySnapshot = MutableStateFlow<List<SensorData>>(emptyList())
-    val replaySnapshot: StateFlow<List<SensorData>> = _replaySnapshot.asStateFlow()
-
-    fun startReplay() {
-        val history = sensorHistory.value
-        if (history.isEmpty()) return
-
-        val currentTime = history.last().timestampMs
-        val tenSecondsAgo = currentTime - 10_000_000_000L // 10 seconds in nanoseconds
-        val last10Seconds = history.filter { it.timestampMs >= tenSecondsAgo }
-
-        _replaySnapshot.value = last10Seconds
-        _playbackIndex.value = 0
-        _isReplaying.value = true
-    }
-
-    fun stopReplay() {
-        _isReplaying.value = false
-        _replaySnapshot.value = emptyList()
-    }
-
     fun tare() {
-        val currentData = engine.currentSensorData.value
+        val currentData = engine.getCurrentRotationVector()
         if (currentData != null) {
-            _tareQuaternion.value = currentData.rotationVector
+            _tareQuaternion.value = currentData.data
         }
     }
 
     /**
      * Apply tare quaternion to sensor data's rotation vector
      */
-    private fun applyTare(data: SensorData, tareQuat: RotationVector?): SensorData {
-        if (tareQuat == null) return data
+    private fun applyTare(reading: RotationVectorReading, tareQuat: RotationVector?): RotationVectorReading {
+        if (tareQuat == null) return reading
 
-        val rotVec = data.rotationVector
+        val rotVec = reading.data
         val x = rotVec.x
         val y = rotVec.y
         val z = rotVec.z
@@ -99,13 +105,11 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
         val tareZ = tareQuat.z
         val tareW = tareQuat.scalar ?: computeScalar(tareX.toDouble(), tareY.toDouble(), tareZ.toDouble())
 
-        // Compute inverse of tare quaternion (conjugate for unit quaternions)
         val tareInvX = -tareX
         val tareInvY = -tareY
         val tareInvZ = -tareZ
         val tareInvW = tareW
 
-        // Multiply: result = tareInverse * sensorQuat
         val resultW = tareInvW * w - tareInvX * x - tareInvY * y - tareInvZ * z
         val resultX = tareInvW * x + tareInvX * w + tareInvY * z - tareInvZ * y
         val resultY = tareInvW * y - tareInvX * z + tareInvY * w + tareInvZ * x
@@ -118,7 +122,7 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
             scalar = resultW
         )
 
-        return data.copy(rotationVector = taredRotationVector)
+        return reading.copy(data = taredRotationVector)
     }
 
     /**
@@ -148,27 +152,6 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
                 // Play sound if it's a tap
                 if (event.type.isTap()) {
                     audioManager.playTapSound()
-                }
-            }
-        }
-
-        // Start a coroutine to drive playback indices when replaying
-        viewModelScope.launch {
-            _isReplaying.collect { replaying ->
-                if (replaying) {
-                    // Snapshot history at start of replay
-                    val history = _replaySnapshot.value
-                    if (history.isEmpty()) return@collect
-
-                    var idx = 0
-                    while (_isReplaying.value && idx < history.size) {
-                        _playbackIndex.value = idx
-                        delay(16L) // ~60Hz
-                        idx++
-                    }
-
-                    // Ensure index ends at last element
-                    _playbackIndex.value = (history.size - 1).coerceAtLeast(0)
                 }
             }
         }
