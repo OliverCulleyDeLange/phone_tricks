@@ -2,16 +2,12 @@ package ocd.phonetricks.engine
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import ocd.phonetricks.data.*
 import ocd.phonetricks.sensor.SensorManager
 import ocd.phonetricks.training.TrainingDataRecorder
-import ocd.phonetricks.utils.currentTimeMillis
 
 class TrickEngine(
     private val sensorManager: SensorManager,
@@ -25,9 +21,6 @@ class TrickEngine(
     private val linearAccelerationBuffer = RingBuffer<LinearAcceleration>(maxHistorySize)
     private val gravityBuffer = RingBuffer<Gravity>(maxHistorySize)
 
-    private val _bufferUpdate = MutableStateFlow(0L)
-    val bufferUpdate: StateFlow<Long> = _bufferUpdate.asStateFlow()
-
     private val trickDetector = TrickDetector()
     private val tapDetector = TapDetector()
 
@@ -40,11 +33,7 @@ class TrickEngine(
         listenToSensors()
     }
 
-    private fun notifyBufferUpdate() {
-        _bufferUpdate.value = currentTimeMillis()
-    }
-
-    private fun detectTricks() {
+    private fun detectEvents() {
         val newTricks = trickDetector.processSensorData(
             gyroscopeBuffer,
             rotationVectorBuffer
@@ -70,9 +59,6 @@ class TrickEngine(
         rotationVectorBuffer.clear()
         linearAccelerationBuffer.clear()
         gravityBuffer.clear()
-
-        notifyBufferUpdate()
-
         trickDetector.reset()
         tapDetector.reset()
     }
@@ -98,23 +84,8 @@ class TrickEngine(
         gravityBuffer
     )
 
-    fun getCurrentAccelerometer(): Accelerometer? =
-        if (accelerometerBuffer.isEmpty()) null else accelerometerBuffer[accelerometerBuffer.size() - 1]
-
-    fun getCurrentGyroscope(): Gyroscope? =
-        if (gyroscopeBuffer.isEmpty()) null else gyroscopeBuffer[gyroscopeBuffer.size() - 1]
-
-    fun getCurrentMagnetometer(): Magnetometer? =
-        if (magnetometerBuffer.isEmpty()) null else magnetometerBuffer[magnetometerBuffer.size() - 1]
-
     fun getCurrentRotationVector(): RotationVector? =
         if (rotationVectorBuffer.isEmpty()) null else rotationVectorBuffer[rotationVectorBuffer.size() - 1]
-
-    fun getCurrentLinearAcceleration(): LinearAcceleration? =
-        if (linearAccelerationBuffer.isEmpty()) null else linearAccelerationBuffer[linearAccelerationBuffer.size() - 1]
-
-    fun getCurrentGravity(): Gravity? =
-        if (gravityBuffer.isEmpty()) null else gravityBuffer[gravityBuffer.size() - 1]
 
     fun getAccelerometerHistory(): List<Accelerometer> = accelerometerBuffer.toList()
 
@@ -128,51 +99,39 @@ class TrickEngine(
         scope.launch {
             sensorManager.accelerometerFlow.collect { reading ->
                 accelerometerBuffer.add(reading)
-                notifyBufferUpdate()
-                detectTricks()
+                detectEvents()
             }
         }
 
         scope.launch {
             sensorManager.gyroscopeFlow.collect { reading ->
                 gyroscopeBuffer.add(reading)
-                notifyBufferUpdate()
-                detectTricks()
+                detectEvents()
             }
         }
 
-        sensorManager.magnetometerFlow?.let { flow ->
-            scope.launch {
-                flow.collect { reading ->
-                    magnetometerBuffer.add(reading)
-                    notifyBufferUpdate()
-                }
+        scope.launch {
+            sensorManager.magnetometerFlow.collect { reading ->
+                magnetometerBuffer.add(reading)
             }
         }
 
         scope.launch {
             sensorManager.rotationVectorFlow.collect { reading ->
                 rotationVectorBuffer.add(reading)
-                notifyBufferUpdate()
             }
         }
 
-        sensorManager.linearAccelerationFlow?.let { flow ->
-            scope.launch {
-                flow.collect { reading ->
-                    linearAccelerationBuffer.add(reading)
-                    notifyBufferUpdate()
-                    detectTricks()
-                }
+        scope.launch {
+            sensorManager.linearAccelerationFlow.collect { reading ->
+                linearAccelerationBuffer.add(reading)
+                detectEvents()
             }
         }
 
-        sensorManager.gravityFlow?.let { flow ->
-            scope.launch {
-                flow.collect { reading ->
-                    gravityBuffer.add(reading)
-                    notifyBufferUpdate()
-                }
+        scope.launch {
+            sensorManager.gravityFlow.collect { reading ->
+                gravityBuffer.add(reading)
             }
         }
     }

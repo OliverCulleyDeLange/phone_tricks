@@ -76,7 +76,7 @@ class AndroidSensorManager(context: Context) : SensorManager {
         }
     }
 
-    override val magnetometerFlow: Flow<Magnetometer>? = magnetometer?.let {
+    override val magnetometerFlow: Flow<Magnetometer> = magnetometer.let {
         callbackFlow {
             val listener = object : SensorEventListener {
                 override fun onSensorChanged(event: SensorEvent?) {
@@ -123,6 +123,7 @@ class AndroidSensorManager(context: Context) : SensorManager {
         }
 
         rotationVector?.let {
+            println("Registering rotation vector sensor")
             androidSensorManager.registerListener(listener, it, SENSOR_DELAY)
         }
 
@@ -131,7 +132,7 @@ class AndroidSensorManager(context: Context) : SensorManager {
         }
     }
 
-    override val linearAccelerationFlow: Flow<LinearAcceleration>? = linearAcceleration?.let {
+    override val linearAccelerationFlow: Flow<LinearAcceleration> = linearAcceleration.let {
         callbackFlow {
             val listener = object : SensorEventListener {
                 override fun onSensorChanged(event: SensorEvent?) {
@@ -158,7 +159,7 @@ class AndroidSensorManager(context: Context) : SensorManager {
         }
     }
 
-    override val gravityFlow: Flow<Gravity>? = gravity?.let {
+    override val gravityFlow: Flow<Gravity> = gravity.let {
         callbackFlow {
             val listener = object : SensorEventListener {
                 override fun onSensorChanged(event: SensorEvent?) {

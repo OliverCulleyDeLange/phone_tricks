@@ -2,17 +2,22 @@ package ocd.phonetricks.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ocd.phonetricks.audio.createAudioManager
-import ocd.phonetricks.data.*
+import ocd.phonetricks.data.Accelerometer
+import ocd.phonetricks.data.Gravity
+import ocd.phonetricks.data.Gyroscope
+import ocd.phonetricks.data.LinearAcceleration
+import ocd.phonetricks.data.Magnetometer
+import ocd.phonetricks.data.RotationVector
+import ocd.phonetricks.data.TrickEvent
+import ocd.phonetricks.data.isTap
 import ocd.phonetricks.engine.TrickEngine
 import ocd.phonetricks.sensor.SensorManager
 import kotlin.math.sqrt
@@ -24,43 +29,23 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
     // Tare quaternion - stores the offset rotation to align the model with the device
     private val _tareQuaternion = MutableStateFlow<RotationVector?>(null)
 
-    val accelerometerData: StateFlow<Accelerometer?> = engine.bufferUpdate.map {
-        engine.getCurrentAccelerometer()
+    val rotationVectorData: StateFlow<RotationVector?> = sensorManager.rotationVectorFlow.map {
+        applyTare(it, _tareQuaternion.value)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val gyroscopeData: StateFlow<Gyroscope?> = engine.bufferUpdate.map {
-        engine.getCurrentGyroscope()
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
-
-    val magnetometerData: StateFlow<Magnetometer?> = engine.bufferUpdate.map {
-        engine.getCurrentMagnetometer()
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
-
-    val rotationVectorData: StateFlow<RotationVector?> = engine.bufferUpdate.map {
-        engine.getCurrentRotationVector()?.let { reading -> applyTare(reading, _tareQuaternion.value) }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
-
-    val linearAccelerationData: StateFlow<LinearAcceleration?> = engine.bufferUpdate.map {
-        engine.getCurrentLinearAcceleration()
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
-
-    val gravityData: StateFlow<Gravity?> = engine.bufferUpdate.map {
-        engine.getCurrentGravity()
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
-
-    val accelerometerHistory: StateFlow<List<Accelerometer>> = engine.bufferUpdate.map {
+    val accelerometerHistory: StateFlow<List<Accelerometer>> = sensorManager.accelerometerFlow.map {
         engine.getAccelerometerHistory()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val gyroscopeHistory: StateFlow<List<Gyroscope>> = engine.bufferUpdate.map {
+    val gyroscopeHistory: StateFlow<List<Gyroscope>> = sensorManager.gyroscopeFlow.map {
         engine.getGyroscopeHistory()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val magnetometerHistory: StateFlow<List<Magnetometer>> = engine.bufferUpdate.map {
+    val magnetometerHistory: StateFlow<List<Magnetometer>> = sensorManager.magnetometerFlow.map {
         engine.getMagnetometerHistory()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val rotationVectorHistory: StateFlow<List<RotationVector>> = engine.bufferUpdate.map {
+    val rotationVectorHistory: StateFlow<List<RotationVector>> = sensorManager.rotationVectorFlow.map {
         val history = engine.getRotationVectorHistory()
         val tare = _tareQuaternion.value
         if (tare == null) {
@@ -70,11 +55,11 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val linearAccelerationHistory: StateFlow<List<LinearAcceleration>> = engine.bufferUpdate.map {
+    val linearAccelerationHistory: StateFlow<List<LinearAcceleration>> = sensorManager.linearAccelerationFlow.map {
         engine.getLinearAccelerationHistory()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val gravityHistory: StateFlow<List<Gravity>> = engine.bufferUpdate.map {
+    val gravityHistory: StateFlow<List<Gravity>> = sensorManager.gravityFlow.map {
         engine.getGravityHistory()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
