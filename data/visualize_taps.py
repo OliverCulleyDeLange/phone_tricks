@@ -13,6 +13,10 @@ def plot_sensor_data(data, output_file=None):
     tap_timestamps = data['tapTimestamps']
     accel_data = data['accelerometerData']
     gyro_data = data['gyroscopeData']
+    mag_data = data.get('magnetometerData', [])
+    linear_accel_data = data.get('linearAccelerationData', [])
+    gravity_data = data.get('gravityData', [])
+    rotation_vector_data = data.get('rotationVectorData', [])
     
     accel_times = [point['timestampMs'] for point in accel_data]
     accel_x = [point['x'] for point in accel_data]
@@ -23,15 +27,32 @@ def plot_sensor_data(data, output_file=None):
     gyro_x = [point['x'] for point in gyro_data]
     gyro_y = [point['y'] for point in gyro_data]
     gyro_z = [point['z'] for point in gyro_data]
-    
-    start_time = min(accel_times[0], gyro_times[0])
+
+    start_time = accel_times[0]
     accel_times_rel = [(t - start_time) / 1000.0 for t in accel_times]
     gyro_times_rel = [(t - start_time) / 1000.0 for t in gyro_times]
     tap_times_rel = [(t - start_time) / 1000.0 for t in tap_timestamps]
-    
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
+
+    num_plots = 2
+    if mag_data:
+        num_plots += 1
+    if linear_accel_data:
+        num_plots += 1
+    if gravity_data:
+        num_plots += 1
+    if rotation_vector_data:
+        num_plots += 1
+
+    fig, axes = plt.subplots(num_plots, 1, figsize=(14, 5 * num_plots))
+    if num_plots == 1:
+        axes = [axes]
+
     fig.suptitle(f'Sensor Data - {label}\n({len(tap_timestamps)} taps)', fontsize=16, fontweight='bold')
-    
+
+    plot_idx = 0
+
+    ax1 = axes[plot_idx]
+    plot_idx += 1
     ax1.plot(accel_times_rel, accel_x, label='X', linewidth=1, alpha=0.8)
     ax1.plot(accel_times_rel, accel_y, label='Y', linewidth=1, alpha=0.8)
     ax1.plot(accel_times_rel, accel_z, label='Z', linewidth=1, alpha=0.8)
@@ -45,7 +66,9 @@ def plot_sensor_data(data, output_file=None):
     ax1.set_title('Accelerometer Data', fontsize=14, fontweight='bold')
     ax1.legend(loc='upper right')
     ax1.grid(True, alpha=0.3)
-    
+
+    ax2 = axes[plot_idx]
+    plot_idx += 1
     ax2.plot(gyro_times_rel, gyro_x, label='X', linewidth=1, alpha=0.8)
     ax2.plot(gyro_times_rel, gyro_y, label='Y', linewidth=1, alpha=0.8)
     ax2.plot(gyro_times_rel, gyro_z, label='Z', linewidth=1, alpha=0.8)
@@ -59,7 +82,106 @@ def plot_sensor_data(data, output_file=None):
     ax2.set_title('Gyroscope Data', fontsize=14, fontweight='bold')
     ax2.legend(loc='upper right')
     ax2.grid(True, alpha=0.3)
-    
+
+    if mag_data:
+        mag_times = [point['timestampMs'] for point in mag_data]
+        mag_x = [point['x'] for point in mag_data]
+        mag_y = [point['y'] for point in mag_data]
+        mag_z = [point['z'] for point in mag_data]
+        mag_times_rel = [(t - start_time) / 1000.0 for t in mag_times]
+
+        ax3 = axes[plot_idx]
+        plot_idx += 1
+        ax3.plot(mag_times_rel, mag_x, label='X', linewidth=1, alpha=0.8)
+        ax3.plot(mag_times_rel, mag_y, label='Y', linewidth=1, alpha=0.8)
+        ax3.plot(mag_times_rel, mag_z, label='Z', linewidth=1, alpha=0.8)
+
+        for i, tap_time in enumerate(tap_times_rel):
+            ax3.axvline(x=tap_time, color='red', linestyle='--', linewidth=2, alpha=0.7,
+                        label='Tap' if i == 0 else '')
+            ax3.text(tap_time, ax3.get_ylim()[1], f'{i + 1}', ha='center', va='bottom', fontsize=10,
+                     color='red', fontweight='bold')
+
+        ax3.set_xlabel('Time (seconds)', fontsize=12)
+        ax3.set_ylabel('Magnetic Field (μT)', fontsize=12)
+        ax3.set_title('Magnetometer Data', fontsize=14, fontweight='bold')
+        ax3.legend(loc='upper right')
+        ax3.grid(True, alpha=0.3)
+
+    if linear_accel_data:
+        linear_times = [point['timestampMs'] for point in linear_accel_data]
+        linear_x = [point['x'] for point in linear_accel_data]
+        linear_y = [point['y'] for point in linear_accel_data]
+        linear_z = [point['z'] for point in linear_accel_data]
+        linear_times_rel = [(t - start_time) / 1000.0 for t in linear_times]
+
+        ax4 = axes[plot_idx]
+        plot_idx += 1
+        ax4.plot(linear_times_rel, linear_x, label='X', linewidth=1, alpha=0.8)
+        ax4.plot(linear_times_rel, linear_y, label='Y', linewidth=1, alpha=0.8)
+        ax4.plot(linear_times_rel, linear_z, label='Z', linewidth=1, alpha=0.8)
+
+        for i, tap_time in enumerate(tap_times_rel):
+            ax4.axvline(x=tap_time, color='red', linestyle='--', linewidth=2, alpha=0.7,
+                        label='Tap' if i == 0 else '')
+            ax4.text(tap_time, ax4.get_ylim()[1], f'{i + 1}', ha='center', va='bottom', fontsize=10,
+                     color='red', fontweight='bold')
+
+        ax4.set_xlabel('Time (seconds)', fontsize=12)
+        ax4.set_ylabel('Acceleration (m/s²)', fontsize=12)
+        ax4.set_title('Linear Acceleration Data', fontsize=14, fontweight='bold')
+        ax4.legend(loc='upper right')
+        ax4.grid(True, alpha=0.3)
+
+    if gravity_data:
+        gravity_times = [point['timestampMs'] for point in gravity_data]
+        gravity_x = [point['x'] for point in gravity_data]
+        gravity_y = [point['y'] for point in gravity_data]
+        gravity_z = [point['z'] for point in gravity_data]
+        gravity_times_rel = [(t - start_time) / 1000.0 for t in gravity_times]
+
+        ax5 = axes[plot_idx]
+        plot_idx += 1
+        ax5.plot(gravity_times_rel, gravity_x, label='X', linewidth=1, alpha=0.8)
+        ax5.plot(gravity_times_rel, gravity_y, label='Y', linewidth=1, alpha=0.8)
+        ax5.plot(gravity_times_rel, gravity_z, label='Z', linewidth=1, alpha=0.8)
+
+        for i, tap_time in enumerate(tap_times_rel):
+            ax5.axvline(x=tap_time, color='red', linestyle='--', linewidth=2, alpha=0.7,
+                        label='Tap' if i == 0 else '')
+            ax5.text(tap_time, ax5.get_ylim()[1], f'{i + 1}', ha='center', va='bottom', fontsize=10,
+                     color='red', fontweight='bold')
+
+        ax5.set_xlabel('Time (seconds)', fontsize=12)
+        ax5.set_ylabel('Gravity (m/s²)', fontsize=12)
+        ax5.set_title('Gravity Data', fontsize=14, fontweight='bold')
+        ax5.legend(loc='upper right')
+        ax5.grid(True, alpha=0.3)
+
+    if rotation_vector_data:
+        rotation_vector_times = [point['timestampMs'] for point in rotation_vector_data]
+        rotation_vector_x = [point['x'] for point in rotation_vector_data]
+        rotation_vector_y = [point['y'] for point in rotation_vector_data]
+        rotation_vector_z = [point['z'] for point in rotation_vector_data]
+        rotation_vector_times_rel = [(t - start_time) / 1000.0 for t in rotation_vector_times]
+
+        ax6 = axes[plot_idx]
+        ax6.plot(rotation_vector_times_rel, rotation_vector_x, label='X', linewidth=1, alpha=0.8)
+        ax6.plot(rotation_vector_times_rel, rotation_vector_y, label='Y', linewidth=1, alpha=0.8)
+        ax6.plot(rotation_vector_times_rel, rotation_vector_z, label='Z', linewidth=1, alpha=0.8)
+
+        for i, tap_time in enumerate(tap_times_rel):
+            ax6.axvline(x=tap_time, color='red', linestyle='--', linewidth=2, alpha=0.7,
+                        label='Tap' if i == 0 else '')
+            ax6.text(tap_time, ax6.get_ylim()[1], f'{i + 1}', ha='center', va='bottom', fontsize=10,
+                     color='red', fontweight='bold')
+
+        ax6.set_xlabel('Time (seconds)', fontsize=12)
+        ax6.set_ylabel('Rotation Vector', fontsize=12)
+        ax6.set_title('Rotation Vector Data', fontsize=14, fontweight='bold')
+        ax6.legend(loc='upper right')
+        ax6.grid(True, alpha=0.3)
+
     plt.tight_layout()
     
     if output_file:
@@ -99,6 +221,10 @@ def batch_process():
             print(f"  Taps: {len(data['tapTimestamps'])}")
             print(f"  Accelerometer samples: {len(data['accelerometerData'])}")
             print(f"  Gyroscope samples: {len(data['gyroscopeData'])}")
+            print(f"  Magnetometer samples: {len(data.get('magnetometerData', []))}")
+            print(f"  Linear Acceleration samples: {len(data.get('linearAccelerationData', []))}")
+            print(f"  Gravity samples: {len(data.get('gravityData', []))}")
+            print(f"  Rotation Vector samples: {len(data.get('rotationVectorData', []))}")
             
             plot_sensor_data(data, str(output_file))
             
@@ -121,6 +247,10 @@ def process_single_file(json_file, output_file=None):
     print(f"Number of taps: {len(data['tapTimestamps'])}")
     print(f"Accelerometer samples: {len(data['accelerometerData'])}")
     print(f"Gyroscope samples: {len(data['gyroscopeData'])}")
+    print(f"Magnetometer samples: {len(data.get('magnetometerData', []))}")
+    print(f"Linear Acceleration samples: {len(data.get('linearAccelerationData', []))}")
+    print(f"Gravity samples: {len(data.get('gravityData', []))}")
+    print(f"Rotation Vector samples: {len(data.get('rotationVectorData', []))}")
     print("\nGenerating plot...")
     
     plot_sensor_data(data, output_file)
