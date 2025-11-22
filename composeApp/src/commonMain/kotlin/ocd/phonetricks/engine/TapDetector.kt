@@ -22,9 +22,25 @@ import kotlin.math.sqrt
  * - Z: Positive points out of the screen (toward user)
  */
 class TapDetector {
-    private val tapThreshold = 1.5f
-    private val tapCooldownMs = 50L
+    private val tapThreshold = 1f
+    private val tapCooldownMs = 100L
+    private val tapWindowMs = 100L
+    private val confidenceThreshold = 0.5f
     private var lastTapTimeMs = 0L
+
+    private enum class TapState {
+        IDLE,
+        ABOVE_THRESHOLD,
+        COMPLETED
+    }
+
+    private var currentState = TapState.IDLE
+    private var windowStartMs = 0L
+    private var peakMagnitude = 0f
+    private var peakAccelX = 0f
+    private var peakAccelY = 0f
+    private var peakAccelZ = 0f
+    private var peakTimestampMs = 0L
 
     /**
      * Process sensor data from the ring buffer and detect taps.
@@ -34,55 +50,83 @@ class TapDetector {
         linearAccelerationBuffer: RingBuffer<LinearAcceleration>,
         rotationVectorBuffer: RingBuffer<RotationVector>
     ): List<TrickEvent> {
-        // We need at least 3 readings to detect a spike pattern
-        if (linearAccelerationBuffer.size() < 3) {
+        if (linearAccelerationBuffer.isEmpty()) {
             return emptyList()
         }
 
         val detectedTaps = mutableListOf<TrickEvent>()
-
-        // Get the last 3 sensor readings
-        val size = linearAccelerationBuffer.size()
-        val previousPrevious = linearAccelerationBuffer[size - 3]
-        val previous = linearAccelerationBuffer[size - 2]
-        val current = linearAccelerationBuffer[size - 1]
-
-        // Calculate magnitudes for each reading
-        val prevPrevMagnitude = calculateMagnitude(previousPrevious.x, previousPrevious.y, previousPrevious.z)
-        val prevMagnitude = calculateMagnitude(previous.x, previous.y, previous.z)
+        val current = linearAccelerationBuffer[linearAccelerationBuffer.size() - 1]
         val currentMagnitude = calculateMagnitude(current.x, current.y, current.z)
 
-        // Check for spike pattern:
-        // 1. Previous-previous was below threshold
-        // 2. Previous went above threshold
-        // 3. Current is below threshold again
-        // This indicates a quick spike characteristic of a tap
-
-        val wasBelow = prevPrevMagnitude < tapThreshold
-        val wentAbove = prevMagnitude > tapThreshold
-        val backBelow = currentMagnitude < tapThreshold
-
-        if (wasBelow && wentAbove && backBelow) {
-            val timeSinceLastTapMs = current.timestampMs - lastTapTimeMs
-            if (timeSinceLastTapMs > tapCooldownMs) {
-                // Use the peak (previous) data to determine tap surface
-                val rotationVector = findClosestRotationVector(rotationVectorBuffer, previous.timestampMs)
-                if (rotationVector != null) {
-                    val tapType = determineTapSurface(
-                        rotationVector,
-                        previous.x,
-                        previous.y,
-                        previous.z
-                    )
-                    val confidence = calculateConfidence(prevMagnitude)
-                    detectedTaps.add(TrickEvent(tapType, current.timestampMs, confidence))
-                    println("Added tap event: $tapType, confidence: $confidence, magnitudes: $prevPrevMagnitude, $prevMagnitude, $currentMagnitude")
-                    lastTapTimeMs = current.timestampMs
+        when (currentState) {
+            TapState.IDLE -> {
+                if (currentMagnitude > tapThreshold) {
+                    currentState = TapState.ABOVE_THRESHOLD
+                    windowStartMs = current.timestampMs
+                    peakMagnitude = currentMagnitude
+                    peakAccelX = current.x
+                    peakAccelY = current.y
+                    peakAccelZ = current.z
+                    peakTimestampMs = current.timestampMs
                 }
+            }
+
+            TapState.ABOVE_THRESHOLD -> {
+                val elapsedMs = current.timestampMs - windowStartMs
+
+                if (elapsedMs > tapWindowMs) {
+                    currentState = TapState.IDLE
+                    resetPeakData()
+                } else if (currentMagnitude > tapThreshold) {
+                    if (currentMagnitude > peakMagnitude) {
+                        peakMagnitude = currentMagnitude
+                        peakAccelX = current.x
+                        peakAccelY = current.y
+                        peakAccelZ = current.z
+                        peakTimestampMs = current.timestampMs
+                    }
+                } else {
+                    val timeSinceLastTapMs = current.timestampMs - lastTapTimeMs
+                    if (timeSinceLastTapMs > tapCooldownMs) {
+                        val rotationVector = findClosestRotationVector(rotationVectorBuffer, peakTimestampMs)
+                        if (rotationVector != null) {
+                            val confidence = calculateConfidence(peakMagnitude)
+                            if (confidence >= confidenceThreshold) {
+                                val tapType = determineTapSurface(
+                                    rotationVector,
+                                    peakAccelX,
+                                    peakAccelY,
+                                    peakAccelZ
+                                )
+                                detectedTaps.add(TrickEvent(tapType, current.timestampMs, confidence))
+                                println("Added tap event: $tapType, confidence: $confidence, peak magnitude: $peakMagnitude")
+                                lastTapTimeMs = current.timestampMs
+                            } else {
+                                println("Filtered low confidence tap: confidence: $confidence, peak magnitude: $peakMagnitude")
+                            }
+                        }
+                    }
+
+                    currentState = TapState.IDLE
+                    resetPeakData()
+                }
+            }
+
+            TapState.COMPLETED -> {
+                currentState = TapState.IDLE
+                resetPeakData()
             }
         }
 
         return detectedTaps
+    }
+
+    private fun resetPeakData() {
+        peakMagnitude = 0f
+        peakAccelX = 0f
+        peakAccelY = 0f
+        peakAccelZ = 0f
+        peakTimestampMs = 0L
     }
 
     /**
@@ -203,12 +247,13 @@ class TapDetector {
      * Higher impact = higher confidence.
      */
     private fun calculateConfidence(magnitude: Float): Float {
-        // Normalize between tapThreshold and 3x threshold
         val normalized = (magnitude - tapThreshold) / (tapThreshold * 2)
         return normalized.coerceIn(0.0f, 1.0f)
     }
 
     fun reset() {
         lastTapTimeMs = 0L
+        currentState = TapState.IDLE
+        resetPeakData()
     }
 }
