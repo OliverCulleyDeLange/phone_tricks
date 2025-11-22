@@ -30,9 +30,9 @@ class IOSSensorManager : SensorManager {
             
             var lastAccelerometer = Accelerometer(0f, 0f, 0f)
             var lastGyroscope = Gyroscope(0f, 0f, 0f)
-            var lastRotationVector: RotationVector? = null
-            var lastLinearAcceleration: LinearAcceleration? = null
-            var lastGravity: Gravity? = null
+            var lastRotationVector = RotationVector(0f, 0f, 0f, 0f)
+            var lastLinearAcceleration = LinearAcceleration(0f, 0f, 0f)
+            var lastGravity = Gravity(0f, 0f, 0f)
             
             val queue = NSOperationQueue.currentQueue() ?: NSOperationQueue.mainQueue
             

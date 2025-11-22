@@ -135,8 +135,6 @@ fun SensorScreen(viewModel: SensorViewModel) {
                             Spacer(modifier = Modifier.height(8.dp))
 
                             PhoneAnimation(
-                                accelerometer = data.accelerometer,
-                                gyroscope = data.gyroscope,
                                 rotationVector = data.rotationVector,
                                 modifier = Modifier
                                     .fillMaxWidth()

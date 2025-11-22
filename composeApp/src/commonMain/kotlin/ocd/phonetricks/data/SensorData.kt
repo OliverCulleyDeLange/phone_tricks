@@ -5,7 +5,7 @@ data class SensorData(
     val accelerometer: Accelerometer,
     val gyroscope: Gyroscope,
     val magnetometer: Magnetometer?,
-    val rotationVector: RotationVector?,
+    val rotationVector: RotationVector,
     val linearAcceleration: LinearAcceleration?,
     val gravity: Gravity?
 )

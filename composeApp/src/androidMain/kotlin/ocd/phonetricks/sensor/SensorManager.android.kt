@@ -33,10 +33,10 @@ class AndroidSensorManager(context: Context) : SensorManager {
 
     private var lastAccelerometer: Accelerometer = Accelerometer(0f, 0f, 0f)
     private var lastGyroscope: Gyroscope = Gyroscope(0f, 0f, 0f)
-    private var lastMagnetometer: Magnetometer? = null
-    private var lastRotationVector: RotationVector? = null
-    private var lastLinearAcceleration: LinearAcceleration? = null
-    private var lastGravity: Gravity? = null
+    private var lastMagnetometer: Magnetometer = Magnetometer(0f, 0f, 0f)
+    private var lastRotationVector: RotationVector = RotationVector(0f, 0f,0f, null)
+    private var lastLinearAcceleration: LinearAcceleration = LinearAcceleration(0f, 0f, 0f)
+    private var lastGravity: Gravity = Gravity(0f, 0f, 0f)
 
     override val sensorDataFlow: Flow<SensorData> = callbackFlow {
         val listener = object : SensorEventListener {
