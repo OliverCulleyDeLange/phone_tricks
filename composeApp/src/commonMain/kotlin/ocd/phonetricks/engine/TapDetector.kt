@@ -21,7 +21,7 @@ import kotlin.math.sqrt
  * - Z: Positive points out of the screen (toward user)
  */
 class TapDetector {
-    private val tapThreshold = 2f
+    private val tapThreshold = 1.5f
     private val tapCooldownMs = 50L
     private var lastTapTimeMs = 0L
 
@@ -69,9 +69,6 @@ class TapDetector {
 
         if (wasBelow && wentAbove && backBelow) {
             val timeSinceLastTapMs = current.timestampMs - lastTapTimeMs
-
-            println("Tap spike detected! prev-prev=$prevPrevMagnitude, prev=$prevMagnitude, current=$currentMagnitude")
-
             if (timeSinceLastTapMs > tapCooldownMs) {
                 // Use the peak (previous) data to determine tap surface
                 val tapType = determineTapSurface(
@@ -82,6 +79,7 @@ class TapDetector {
                 )
                 val confidence = calculateConfidence(prevMagnitude)
                 detectedTaps.add(TrickEvent(tapType, current.timestampMs, confidence))
+                println("Added tap event: $tapType, confidence: $confidence, magnitudes: $prevPrevMagnitude, $prevMagnitude, $currentMagnitude")
                 lastTapTimeMs = current.timestampMs
             }
         }

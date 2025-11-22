@@ -44,17 +44,12 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, engine.sensorHistory.value)
 
-    // Detected tricks - accumulated for UI display
     private val _detectedTricks = MutableStateFlow<List<TrickEvent>>(emptyList())
     val detectedTricks: StateFlow<List<TrickEvent>> = _detectedTricks.asStateFlow()
 
-    val isRecording: StateFlow<Boolean> = engine.isRecording
-
-    // Replay mode
     private val _isReplaying = MutableStateFlow(false)
     val isReplaying: StateFlow<Boolean> = _isReplaying.asStateFlow()
 
-    // Playback index flow for replay UI (emits 0-based index into `sensorHistory`)
     private val _playbackIndex = MutableStateFlow(0)
     val playbackIndexFlow: StateFlow<Int> = _playbackIndex.asStateFlow()
 
@@ -62,19 +57,7 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
     private val _replaySnapshot = MutableStateFlow<List<SensorData>>(emptyList())
     val replaySnapshot: StateFlow<List<SensorData>> = _replaySnapshot.asStateFlow()
 
-    fun startRecording() {
-        engine.startRecording()
-        _isReplaying.value = false
-    }
-
-    fun stopRecording() {
-        engine.stopRecording()
-    }
-
     fun startReplay() {
-        engine.stopRecording() // Pause sensor collection during replay
-
-        // Get the last 10 seconds of data
         val history = sensorHistory.value
         if (history.isEmpty()) return
 
@@ -90,12 +73,6 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
     fun stopReplay() {
         _isReplaying.value = false
         _replaySnapshot.value = emptyList()
-        engine.startRecording() // Resume sensor collection
-    }
-
-    fun clearHistory() {
-        engine.clearHistory()
-        _detectedTricks.value = emptyList()
     }
 
     fun tare() {

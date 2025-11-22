@@ -1,12 +1,15 @@
 package ocd.phonetricks.sensor
 
 import kotlinx.coroutines.flow.Flow
-import ocd.phonetricks.data.SensorData
+import ocd.phonetricks.data.*
 
 interface SensorManager {
-    val sensorDataFlow: Flow<SensorData>
-    fun startListening()
-    fun stopListening()
+    val accelerometerFlow: Flow<AccelerometerReading>
+    val gyroscopeFlow: Flow<GyroscopeReading>
+    val magnetometerFlow: Flow<MagnetometerReading>?
+    val rotationVectorFlow: Flow<RotationVectorReading>
+    val linearAccelerationFlow: Flow<LinearAccelerationReading>?
+    val gravityFlow: Flow<GravityReading>?
 }
 
 expect fun createSensorManager(): SensorManager

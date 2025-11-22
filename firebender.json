@@ -1,0 +1,22 @@
+{
+  "rules": [
+    "Don't write summary documents",
+    "Don't write comments, anywhere",
+    {
+      "filePathMatches": "glob/pattern",
+      "rules": ["rule1", "rule2"]
+    }
+  ],
+  "ignore": [
+    "glob/pattern1",
+    "glob/pattern2"
+  ],
+  "mcpServers": {
+    "serverName": {
+      "command": "executable",
+      "args": ["arg1", "arg2"],
+      "env": {"KEY": "VALUE"}
+    }
+  },
+  "mcpEnvFile": "path/to/env/file"
+}

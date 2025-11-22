@@ -14,6 +14,8 @@ tricks.
 - **Cross-Platform UI**: Compose Multiplatform UI works on Android and iOS
 - **Tap Detection**: Identifies taps on front, back, or any of the 4 edges using accelerometer data
 - **Trick Detection**: Detects spins and flips using gyroscope angular velocity
+- **Training Data Collection**: Record and export labeled sensor data at maximum sampling rates for
+  ML model training
 
 ## Sensor Support
 
@@ -178,6 +180,45 @@ was tapped:
     - Z: Points out of screen toward user
 
 - **Confidence Score**: Based on impact magnitude (normalized between threshold and 3x threshold)
+
+### Training Data Collection 🎯
+
+The app includes a **Training Data Collection** mode for building machine learning datasets:
+
+- **Maximum Sampling Rate**:
+    - Android: `SENSOR_DELAY_FASTEST` (200-500+ Hz depending on device)
+    - iOS: 100 Hz update rate
+    - Minimal emission delay (1ms) for maximum throughput
+
+- **Data Export**:
+    - Captures complete ring buffer (600 samples, ~10 seconds)
+    - Saves as JSON with all sensor data and labels
+    - Files saved to Downloads (Android) or Documents (iOS)
+
+- **Supported Labels**:
+    - TAP_FRONT, TAP_BACK
+    - TAP_TOP, TAP_BOTTOM
+    - TAP_LEFT, TAP_RIGHT
+
+- **Usage**:
+    1. Switch to "Training" tab in bottom navigation
+    2. Perform a tap on the desired surface
+    3. Immediately press the corresponding button
+    4. Repeat 20-50 times per surface for robust training data
+
+- **File Format**:
+
+```json
+{
+  "label": "TAP_BACK",
+  "sampleRate": "FASTEST/100Hz",
+  "recordingTimestampMs": 1234567890123,
+  "sensorData": [ /* 600 sensor readings */ ]
+}
+```
+
+See [TRAINING_DATA.md](TRAINING_DATA.md) for detailed instructions on collecting and using training
+data.
 
 ### UI Display
 

@@ -19,7 +19,6 @@ fun SensorScreen(viewModel: SensorViewModel) {
     val sensorData by viewModel.sensorData.collectAsState()
     val sensorHistory by viewModel.sensorHistory.collectAsState()
     val detectedTricks by viewModel.detectedTricks.collectAsState()
-    val isRecording by viewModel.isRecording.collectAsState()
     val isReplaying by viewModel.isReplaying.collectAsState()
     val playbackIndex by viewModel.playbackIndexFlow.collectAsState()
     val replaySnapshot by viewModel.replaySnapshot.collectAsState()
@@ -47,18 +46,10 @@ fun SensorScreen(viewModel: SensorViewModel) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                // Recording status indicator and Replay button
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (isRecording) {
-                        Canvas(modifier = Modifier.size(8.dp)) {
-                            drawCircle(
-                                color = androidx.compose.ui.graphics.Color.Red
-                            )
-                        }
-                    }
                     Button(
                         onClick = {
                             if (isReplaying) {

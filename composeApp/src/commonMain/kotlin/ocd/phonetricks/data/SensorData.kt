@@ -1,5 +1,8 @@
 package ocd.phonetricks.data
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class SensorData(
     val timestampMs: Long,
     val accelerometer: Accelerometer,
@@ -10,24 +13,28 @@ data class SensorData(
     val gravity: Gravity?
 )
 
+@Serializable
 data class Accelerometer(
     val x: Float,
     val y: Float,
     val z: Float
 )
 
+@Serializable
 data class Gyroscope(
     val x: Float,
     val y: Float,
     val z: Float
 )
 
+@Serializable
 data class Magnetometer(
     val x: Float,
     val y: Float,
     val z: Float
 )
 
+@Serializable
 data class RotationVector(
     val x: Float,
     val y: Float,
@@ -35,12 +42,14 @@ data class RotationVector(
     val scalar: Float? = null // Some platforms provide a 4th component
 )
 
+@Serializable
 data class LinearAcceleration(
     val x: Float,
     val y: Float,
     val z: Float
 )
 
+@Serializable
 data class Gravity(
     val x: Float,
     val y: Float,
