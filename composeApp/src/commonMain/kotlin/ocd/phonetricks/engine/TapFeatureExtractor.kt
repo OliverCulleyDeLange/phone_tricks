@@ -19,10 +19,6 @@ class TapFeatureExtractor {
 
         features.addAll(extractSensorFeatures(accelerometerBuffer, tapTimestamp, windowMs))
         features.addAll(extractSensorFeatures(gyroscopeBuffer, tapTimestamp, windowMs))
-        features.addAll(extractSensorFeatures(linearAccelerationBuffer, tapTimestamp, windowMs))
-        features.addAll(extractSensorFeatures(magnetometerBuffer, tapTimestamp, windowMs))
-        features.addAll(extractSensorFeatures(gravityBuffer, tapTimestamp, windowMs))
-        features.addAll(extractSensorFeatures(rotationVectorBuffer, tapTimestamp, windowMs))
 
         return features.toFloatArray()
     }
@@ -79,10 +75,6 @@ class TapFeatureExtractor {
         return when (reading) {
             is Accelerometer -> Triple(reading.x, reading.y, reading.z)
             is Gyroscope -> Triple(reading.x, reading.y, reading.z)
-            is LinearAcceleration -> Triple(reading.x, reading.y, reading.z)
-            is Magnetometer -> Triple(reading.x, reading.y, reading.z)
-            is Gravity -> Triple(reading.x, reading.y, reading.z)
-            is RotationVector -> Triple(reading.x, reading.y, reading.z)
             else -> Triple(0f, 0f, 0f)
         }
     }

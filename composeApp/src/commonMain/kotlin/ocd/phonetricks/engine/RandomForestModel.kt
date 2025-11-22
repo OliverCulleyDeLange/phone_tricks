@@ -91,6 +91,8 @@ class RandomForestModel(private val modelData: RandomForestModelData) {
         return value.indices.maxByOrNull { value[it] } ?: 0
     }
 
+    fun getClasses(): List<String> = modelData.classes
+
     companion object {
         fun loadFromJson(jsonString: String): RandomForestModel {
             val json = Json { ignoreUnknownKeys = true }

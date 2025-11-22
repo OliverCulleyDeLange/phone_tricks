@@ -53,7 +53,8 @@ python train_tap_model.py
 This will:
 
 - Load all training data from `training_data/`
-- Extract features from sensor data (200ms window around each tap)
+- Extract features from sensor data (200ms window around each tap) using the shared
+  `feature_extraction.py` module
 - Train a Random Forest classifier
 - Show accuracy metrics and feature importance
 - Save model to `models/tap_classifier.pkl` and `models/scaler.pkl`
@@ -90,7 +91,7 @@ Expected output:
 ```
 Loading model and scaler...
 Model classes: ['TAP_FRONT' 'TAP_BACK' ...]
-Number of features: 90
+Number of features: 30
 Number of trees: 100
 
 ✓ Model exported to: models/tap_classifier_kotlin.json
@@ -120,10 +121,10 @@ This will predict the tap type for each tap in the file and show accuracy.
 
 ## Feature Engineering
 
-The model extracts the following features from each tap (200ms window):
+The model extracts the following features from each tap (200ms window) using the centralized
+`feature_extraction.py` module:
 
-For each sensor (Accelerometer, Gyroscope, LinearAcceleration, Magnetometer, Gravity,
-RotationVector):
+For each sensor (Accelerometer, Gyroscope):
 
 - Mean of X, Y, Z axes
 - Standard deviation of X, Y, Z axes
@@ -131,7 +132,7 @@ RotationVector):
 - Min of X, Y, Z axes
 - Peak-to-peak (range) of X, Y, Z axes
 
-Total: 6 sensors × 15 features = 90 features per tap
+Total: 2 sensors × 15 features = 30 features per tap
 
 ## Data Quality Tips
 
@@ -166,6 +167,7 @@ Total: 6 sensors × 15 features = 90 features per tap
 - `training_data/` - JSON files with tap collection sessions
 - `visualizations/` - PNG charts of sensor data
 - `models/` - Trained model files (generated after training)
+- `feature_extraction.py` - Shared feature extraction logic
 
 ## Model Architecture
 
@@ -191,6 +193,6 @@ The trained model is integrated into the app via:
 
 - **MLTapDetector** - Combines spike detection with ML classification
 - **RandomForestModel** - Pure Kotlin Random Forest inference
-- **TapFeatureExtractor** - Extracts 90 features matching training code
+- **TapFeatureExtractor** - Extracts 30 features matching training code
 
 See `../QUICK_START.md` and `ML_INTEGRATION_GUIDE.md` for details.
