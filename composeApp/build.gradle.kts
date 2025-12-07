@@ -53,14 +53,28 @@ kotlin {
 android {
     namespace = "ocd.phonetricks"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
-
+    ndkVersion = "27.1.12297006"
     defaultConfig {
         applicationId = "ocd.phonetricks"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
         versionName = "1.0"
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-std=c++17 -Wall"
+                arguments += "-DANDROID_STL=c++_shared"
+            }
+        }
     }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/androidMain/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -80,4 +94,3 @@ android {
 dependencies {
     debugImplementation(compose.uiTooling)
 }
-

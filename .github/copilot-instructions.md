@@ -1,0 +1,13 @@
+# Copilot Instructions for PhoneTricks Project
+
+## Rule 1: Summary Documents
+- Do NOT create .md summary/documentation files automatically
+- Provide brief final summary as text in chat instead
+- Update main README.md file if the changes are related to features added or modified
+
+## Rule 2: Comments
+- Don't write any comments unless explaining why hacky code exists
+
+## Rule 3: Communication
+- Keep responses concise and action-focused
+

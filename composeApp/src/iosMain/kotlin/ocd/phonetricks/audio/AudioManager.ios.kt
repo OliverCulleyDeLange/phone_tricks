@@ -1,28 +1,32 @@
 package ocd.phonetricks.audio
 
-import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.get
-import kotlinx.cinterop.set
+import kotlinx.cinterop.*
 import platform.AVFAudio.*
-import kotlin.math.PI
-import kotlin.math.sin
+import platform.Foundation.*
+import kotlin.math.*
 
 actual fun createAudioManager(): AudioManager = IOSAudioManager()
 
-@OptIn(ExperimentalForeignApi::class)
 class IOSAudioManager : AudioManager {
+    // Temporary implementation using AVAudioEngine
     private val audioEngine = AVAudioEngine()
     private val playerNode = AVAudioPlayerNode()
 
     private val sampleRate = 44100.0
-    private val duration = 0.05 // 50ms
-    private val frequency = 800.0 // Hz
+    private var isPlaying = false
 
-    private var audioBuffer: AVAudioPCMBuffer? = null
+    // Current sound parameters
+    private var currentFrequency = 440f
+    private var currentAmplitude = 0.5f
+    private var currentWaveform = Waveform.SINE
+
+    // Buffer size for audio generation
+    private val bufferSize = 2048
+    private var phase = 0.0
 
     init {
+        NSLog("Initializing iOS Audio Manager")
         setupAudioEngine()
-        generateTapSound()
     }
 
     private fun setupAudioEngine() {
@@ -33,56 +37,105 @@ class IOSAudioManager : AudioManager {
             channels = 1u
         )
 
-        format?.let {
-            audioEngine.connect(playerNode, audioEngine.mainMixerNode, it)
-        }
-
-        try {
-            audioEngine.startAndReturnError(null)
-        } catch (e: Exception) {
-            println("Error starting audio engine: ${e.message}")
+        if (format != null) {
+            audioEngine.connect(playerNode, audioEngine.mainMixerNode, format)
+            try {
+                audioEngine.startAndReturnError(null)
+                NSLog("Audio engine started successfully")
+            } catch (e: Throwable) {
+                NSLog("Failed to start audio engine: ${e.message}")
+            }
+        } else {
+            NSLog("Failed to create audio format")
         }
     }
 
-    private fun generateTapSound() {
+    override fun playSynthSound(frequency: Float, amplitude: Float, waveform: Waveform) {
+        currentFrequency = frequency
+        currentAmplitude = amplitude
+        currentWaveform = waveform
+
+        if (!isPlaying) {
+            isPlaying = true
+            generateAndPlaySound()
+        }
+    }
+
+    override fun stopSound() {
+        isPlaying = false
+        playerNode.stop()
+    }
+
+    override fun release() {
+        stopSound()
+        audioEngine.stop()
+    }
+
+    @OptIn(ExperimentalForeignApi::class)
+    private fun generateAndPlaySound() {
         val format = AVAudioFormat(
             standardFormatWithSampleRate = sampleRate,
             channels = 1u
         ) ?: return
 
-        val numSamples = (duration * sampleRate).toInt()
-        val buffer = AVAudioPCMBuffer(pCMFormat = format, frameCapacity = numSamples.toUInt())
-        buffer.frameLength = numSamples.toUInt()
+        val buffer = AVAudioPCMBuffer(pCMFormat = format, frameCapacity = bufferSize.toUInt())
+        if (buffer == null) {
+            NSLog("Failed to create audio buffer")
+            return
+        }
 
-        val channelData = buffer.floatChannelData ?: return
+        // Set the buffer length
+        buffer.frameLength = bufferSize.toUInt()
+
+        // Get the audio buffer data
+        val channelData = buffer.floatChannelData
+        if (channelData == null) {
+            NSLog("Failed to get channel data")
+            return
+        }
+
         val samples = channelData[0] ?: return
 
-        // Generate a sine wave with envelope (fade in/out to avoid clicks)
-        for (i in 0 until numSamples) {
-            val angle = 2.0 * PI * i / (sampleRate / frequency)
-            val envelope = when {
-                i < numSamples * 0.1 -> i / (numSamples * 0.1) // Fade in (10%)
-                i > numSamples * 0.7 -> (numSamples - i) / (numSamples * 0.3) // Fade out (30%)
-                else -> 1.0
+        // Generate the waveform
+        val phaseIncrement = 2.0 * PI * currentFrequency.toDouble() / sampleRate
+
+        for (i in 0 until bufferSize) {
+            val sample = when (currentWaveform) {
+                Waveform.SINE -> sin(phase)
+                Waveform.SQUARE -> if (phase < PI) 1.0 else -1.0
+                Waveform.TRIANGLE -> {
+                    val normalizedPhase = (phase / (2.0 * PI))
+                    when {
+                        normalizedPhase < 0.25 -> normalizedPhase * 4.0
+                        normalizedPhase < 0.75 -> 2.0 - (normalizedPhase * 4.0)
+                        else -> (normalizedPhase * 4.0) - 4.0
+                    }
+                }
+
+                Waveform.SAWTOOTH -> {
+                    val normalizedPhase = (phase / (2.0 * PI))
+                    2.0 * (normalizedPhase - floor(0.5 + normalizedPhase))
+                }
             }
-            samples[i] = (sin(angle) * envelope * 0.3).toFloat() // 30% volume
+
+            samples[i] = (sample * currentAmplitude).toFloat()
+            phase += phaseIncrement
+            if (phase > 2.0 * PI) {
+                phase -= 2.0 * PI
+            }
         }
 
-        audioBuffer = buffer
-    }
-
-    override fun playTapSound() {
-        audioBuffer?.let { buffer ->
-            if (playerNode.playing) {
-                playerNode.stop()
+        // Schedule the buffer to play
+        playerNode.scheduleBuffer(buffer, completionCallbackType = AVAudioPlayerNodeCompletionDataConsumed) {
+            // Recursive play for continuous sound
+            if (this.isPlaying) {
+                this.generateAndPlaySound()
             }
-            playerNode.scheduleBuffer(buffer, completionHandler = null)
+        }
+
+        // Start playback if not already playing
+        if (!playerNode.playing) {
             playerNode.play()
         }
-    }
-
-    override fun release() {
-        playerNode.stop()
-        audioEngine.stop()
     }
 }

@@ -16,9 +16,6 @@ import ocd.phonetricks.data.Gyroscope
 import ocd.phonetricks.data.LinearAcceleration
 import ocd.phonetricks.data.Magnetometer
 import ocd.phonetricks.data.RotationVector
-import ocd.phonetricks.data.TrickEvent
-import ocd.phonetricks.data.isTap
-import ocd.phonetricks.engine.TrickEngine
 import ocd.phonetricks.sensor.SensorManager
 import ocd.phonetricks.utils.currentTimeMillis
 import kotlin.math.sqrt
@@ -29,8 +26,7 @@ data class ConfidenceReading(
     val negativeConfidence: Float
 )
 
-class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
-    private val engine = TrickEngine(sensorManager, viewModelScope)
+class SensorViewModel(private val sensorManager: SensorManager) : ViewModel() {
     private val audioManager = createAudioManager()
 
     // Tare quaternion - stores the offset rotation to align the model with the device
@@ -40,46 +36,66 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
         applyTare(it, _tareQuaternion.value)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val accelerometerHistory: StateFlow<List<Accelerometer>> = sensorManager.accelerometerFlow.map {
-        engine.getAccelerometerHistory()
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val accelerometerHistory = MutableStateFlow<List<Accelerometer>>(emptyList())
+    val gyroscopeHistory = MutableStateFlow<List<Gyroscope>>(emptyList())
+    val magnetometerHistory = MutableStateFlow<List<Magnetometer>>(emptyList())
+    val rotationVectorHistory = MutableStateFlow<List<RotationVector>>(emptyList())
+    val linearAccelerationHistory = MutableStateFlow<List<LinearAcceleration>>(emptyList())
+    val gravityHistory = MutableStateFlow<List<Gravity>>(emptyList())
 
-    val gyroscopeHistory: StateFlow<List<Gyroscope>> = sensorManager.gyroscopeFlow.map {
-        engine.getGyroscopeHistory()
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    private val historySize = 100
 
-    val magnetometerHistory: StateFlow<List<Magnetometer>> = sensorManager.magnetometerFlow.map {
-        engine.getMagnetometerHistory()
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    val rotationVectorHistory: StateFlow<List<RotationVector>> = sensorManager.rotationVectorFlow.map {
-        val history = engine.getRotationVectorHistory()
-        val tare = _tareQuaternion.value
-        if (tare == null) {
-            history
-        } else {
-            history.map { reading -> applyTare(reading, tare) }
+    init {
+        // Subscribe to sensor data
+        viewModelScope.launch {
+            sensorManager.accelerometerFlow.collect { reading ->
+                accelerometerHistory.value = updateHistory(accelerometerHistory.value, reading)
+            }
         }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val linearAccelerationHistory: StateFlow<List<LinearAcceleration>> = sensorManager.linearAccelerationFlow.map {
-        engine.getLinearAccelerationHistory()
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        viewModelScope.launch {
+            sensorManager.gyroscopeFlow.collect { reading ->
+                gyroscopeHistory.value = updateHistory(gyroscopeHistory.value, reading)
+            }
+        }
 
-    val gravityHistory: StateFlow<List<Gravity>> = sensorManager.gravityFlow.map {
-        engine.getGravityHistory()
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        viewModelScope.launch {
+            sensorManager.magnetometerFlow.collect { reading ->
+                magnetometerHistory.value = updateHistory(magnetometerHistory.value, reading)
+            }
+        }
 
-    private val _detectedTricks = MutableStateFlow<List<TrickEvent>>(emptyList())
-    val detectedTricks: StateFlow<List<TrickEvent>> = _detectedTricks.asStateFlow()
+        viewModelScope.launch {
+            sensorManager.rotationVectorFlow.collect { reading ->
+                val taredReading = applyTare(reading, _tareQuaternion.value)
+                rotationVectorHistory.value = updateHistory(rotationVectorHistory.value, taredReading)
+            }
+        }
 
-    private val _confidenceHistory = MutableStateFlow<List<ConfidenceReading>>(emptyList())
-    val confidenceHistory: StateFlow<List<ConfidenceReading>> = _confidenceHistory.asStateFlow()
+        viewModelScope.launch {
+            sensorManager.linearAccelerationFlow.collect { reading ->
+                linearAccelerationHistory.value = updateHistory(linearAccelerationHistory.value, reading)
+            }
+        }
 
-    private val maxConfidenceHistorySize = 1000
+        viewModelScope.launch {
+            sensorManager.gravityFlow.collect { reading ->
+                gravityHistory.value = updateHistory(gravityHistory.value, reading)
+            }
+        }
+    }
+
+    private fun <T> updateHistory(history: List<T>, newReading: T): List<T> {
+        val newHistory = history + newReading
+        return if (newHistory.size > historySize) {
+            newHistory.takeLast(historySize)
+        } else {
+            newHistory
+        }
+    }
 
     fun tare() {
-        val currentData = engine.getCurrentRotationVector()
+        val currentData = rotationVectorHistory.value.lastOrNull()
         if (currentData != null) {
             _tareQuaternion.value = currentData
         }
@@ -135,33 +151,5 @@ class SensorViewModel(sensorManager: SensorManager) : ViewModel() {
     override fun onCleared() {
         super.onCleared()
         audioManager.release()
-    }
-
-    init {
-        // Listen to trick events and play sounds for taps
-        viewModelScope.launch {
-            engine.trickEvents.collect { event ->
-                // Add to accumulated list for UI
-                _detectedTricks.value = _detectedTricks.value + event
-
-                // Play sound if it's a tap
-                if (event.type.isTap()) {
-                    audioManager.playTapSound()
-                }
-            }
-        }
-
-        viewModelScope.launch {
-            engine.inferenceResults.collect { result ->
-                _confidenceHistory.value = _confidenceHistory.value + ConfidenceReading(
-                    result.timestampMs,
-                    result.tapConfidence,
-                    result.negativeConfidence
-                )
-                if (_confidenceHistory.value.size > maxConfidenceHistorySize) {
-                    _confidenceHistory.value = _confidenceHistory.value.drop(1)
-                }
-            }
-        }
     }
 }

@@ -1,0 +1,8 @@
+package = ocd.phonetricks.audio.native
+language = Objective-C++
+headers = SuperpoweredSynthesizer.h
+
+# Functions from the bridge
+static.libraryPaths = src/iosMain/native/libs
+static.libraries = superpowered
+static.function = SuperpoweredSynth_create SuperpoweredSynth_playSound SuperpoweredSynth_stopSound SuperpoweredSynth_release

@@ -26,13 +26,6 @@ actual fun PhoneVisualization3D(
                 text = "iOS 3D Visualization\n(Not yet implemented)",
                 color = Color.Gray
             )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "Rotation: x=${rotationVector.x}, y=${rotationVector.y}, z=${rotationVector.z}",
-                color = Color.Gray
-            )
         }
 
         // Add tare button if callback is provided
