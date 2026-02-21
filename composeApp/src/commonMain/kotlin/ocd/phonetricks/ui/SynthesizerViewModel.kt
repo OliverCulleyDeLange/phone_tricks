@@ -7,29 +7,28 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.launch
 import ocd.phonetricks.audio.AudioManager
 import ocd.phonetricks.audio.Waveform
 import ocd.phonetricks.data.Accelerometer
+import ocd.phonetricks.data.ControlMapping
+import ocd.phonetricks.data.ControlParameter
+import ocd.phonetricks.data.ControlSurface
 import ocd.phonetricks.data.RotationVector
 import ocd.phonetricks.sensor.SensorManager
-import kotlin.math.max
-import kotlin.math.min
 
 class SynthesizerViewModel(
-    private val sensorManager: SensorManager,
-    private val audioManager: AudioManager
+    sensorManager: SensorManager,
+    private val audioManager: AudioManager,
+    private val settingsViewModel: SettingsViewModel,
 ) : ViewModel() {
 
-    // Device position state (still keep for visualization)
     private val _rotationVector = MutableStateFlow<RotationVector?>(null)
     val rotationVector: StateFlow<RotationVector?> = _rotationVector.asStateFlow()
 
     private val _acceleration = MutableStateFlow<Accelerometer?>(null)
     val acceleration: StateFlow<Accelerometer?> = _acceleration.asStateFlow()
 
-    // Synthesizer parameters
-    private val _baseFrequency = MutableStateFlow(440f) // A4 note
+    private val _baseFrequency = MutableStateFlow(440f)
     val baseFrequency: StateFlow<Float> = _baseFrequency.asStateFlow()
 
     private val _amplitude = MutableStateFlow(0.5f)
@@ -38,104 +37,131 @@ class SynthesizerViewModel(
     private val _waveform = MutableStateFlow(Waveform.SINE)
     val waveform: StateFlow<Waveform> = _waveform.asStateFlow()
 
-    // Tap box state
     private val _isTouchInBox = MutableStateFlow(false)
     val isTouchInBox: StateFlow<Boolean> = _isTouchInBox.asStateFlow()
 
-    // Touch position in box (normalized 0.0-1.0)
     private val _touchX = MutableStateFlow(0.5f)
     private val _touchY = MutableStateFlow(0.5f)
+    private val _accelX = MutableStateFlow(0f)
+    private val _accelY = MutableStateFlow(0f)
+    private val _accelZ = MutableStateFlow(0f)
+    private val _gyroX = MutableStateFlow(0f)
+    private val _gyroY = MutableStateFlow(0f)
+    private val _gyroZ = MutableStateFlow(0f)
+    private val _quatX = MutableStateFlow(0f)
+    private val _quatY = MutableStateFlow(0f)
+    private val _quatZ = MutableStateFlow(0f)
+    private val _quatW = MutableStateFlow(1f)
 
-    // Min/Max values for mapping
-    private val minFrequency = 110f   // A2 note
-    private val maxFrequency = 1760f  // A6 note
+    private val surfaceValues: Map<ControlSurface, MutableStateFlow<Float>> = mapOf(
+        ControlSurface.TOUCH_X to _touchX,
+        ControlSurface.TOUCH_Y to _touchY,
+        ControlSurface.ACCEL_X to _accelX,
+        ControlSurface.ACCEL_Y to _accelY,
+        ControlSurface.ACCEL_Z to _accelZ,
+        ControlSurface.GYRO_X to _gyroX,
+        ControlSurface.GYRO_Y to _gyroY,
+        ControlSurface.GYRO_Z to _gyroZ,
+        ControlSurface.QUATERNION_X to _quatX,
+        ControlSurface.QUATERNION_Y to _quatY,
+        ControlSurface.QUATERNION_Z to _quatZ,
+        ControlSurface.QUATERNION_W to _quatW,
+    )
 
     init {
-        // Subscribe to sensor data (still keep for visualization)
         sensorManager.rotationVectorFlow
-            .onEach { rotation ->
-                _rotationVector.value = rotation
+            .onEach { r ->
+                _rotationVector.value = r
+                _quatX.value = r.x
+                _quatY.value = r.y
+                _quatZ.value = r.z
+                _quatW.value = r.scalar ?: 1f
+                recompute(settingsViewModel.mappings.value)
             }
             .launchIn(viewModelScope)
 
         sensorManager.accelerometerFlow
-            .onEach { accel ->
-                _acceleration.value = accel
+            .onEach { a ->
+                _acceleration.value = a
+                _accelX.value = a.x
+                _accelY.value = a.y
+                _accelZ.value = a.z
+                recompute(settingsViewModel.mappings.value)
             }
+            .launchIn(viewModelScope)
+
+        sensorManager.gyroscopeFlow
+            .onEach { g ->
+                _gyroX.value = g.x
+                _gyroY.value = g.y
+                _gyroZ.value = g.z
+                recompute(settingsViewModel.mappings.value)
+            }
+            .launchIn(viewModelScope)
+
+        settingsViewModel.mappings
+            .onEach { recompute(it) }
             .launchIn(viewModelScope)
     }
 
-    /**
-     * Update synthesizer parameters based on touch position
-     *
-     * @param x Normalized X position (0.0-1.0, left to right)
-     * @param y Normalized Y position (0.0-1.0, top to bottom)
-     */
-    private fun updateParametersFromTouch(x: Float, y: Float) {
-        // Map x (0.0-1.0) to frequency range
-        val frequency = minFrequency + x * (maxFrequency - minFrequency)
-        _baseFrequency.value = frequency
+    private fun recompute(mappings: List<ControlMapping>) {
+        val pitchMappings = mappings.filterIsInstance<ControlMapping>()
+            .filter { it.parameter is ControlParameter.Pitch }
+        val volumeMappings = mappings.filter { it.parameter is ControlParameter.Volume }
+        val waveformMappings = mappings.filter { it.parameter is ControlParameter.Waveform }
 
-        // Map y (0.0-1.0) to amplitude (invert y so higher is louder)
-        val invertedY = 1f - y  // So bottom is quiet (0) and top is loud (1)
-        _amplitude.value = max(0.1f, min(invertedY, 1.0f))
-
-        // Update sound
-        playSynthSound()
-    }
-
-    /**
-     * Toggle between different waveforms
-     */
-    fun cycleWaveform() {
-        val currentWaveform = _waveform.value
-        _waveform.value = when (currentWaveform) {
-            Waveform.SINE -> Waveform.SQUARE
-            Waveform.SQUARE -> Waveform.TRIANGLE
-            Waveform.TRIANGLE -> Waveform.SAWTOOTH
-            Waveform.SAWTOOTH -> Waveform.SINE
+        val frequency = if (pitchMappings.isEmpty()) _baseFrequency.value else {
+            val p = pitchMappings.first().parameter as ControlParameter.Pitch
+            val t = pitchMappings.map { normalize(it) }.average().toFloat().coerceIn(0f, 1f)
+            p.min + t * (p.max - p.min)
         }
+
+        val amplitude = if (volumeMappings.isEmpty()) _amplitude.value else {
+            val p = volumeMappings.first().parameter as ControlParameter.Volume
+            val t = volumeMappings.map { normalize(it) }.average().toFloat().coerceIn(0f, 1f)
+            p.min + t * (p.max - p.min)
+        }
+
+        val waveform = if (waveformMappings.isEmpty()) _waveform.value else {
+            val p = waveformMappings.first().parameter as ControlParameter.Waveform
+            val t = waveformMappings.map { normalize(it) }.average().toFloat().coerceIn(0f, 1f)
+            mapWaveform(t, p)
+        }
+
+        _baseFrequency.value = frequency
+        _amplitude.value = amplitude
+        _waveform.value = waveform
 
         if (_isTouchInBox.value) {
-            playSynthSound()
+            audioManager.playSynthSound(frequency, amplitude, waveform)
         }
     }
 
-    /**
-     * Play synthesized sound with current parameters
-     */
-    private fun playSynthSound() {
-        audioManager.playSynthSound(
-            frequency = _baseFrequency.value,
-            amplitude = _amplitude.value,
-            waveform = _waveform.value
-        )
+    private fun normalize(mapping: ControlMapping): Float {
+        val raw = surfaceValues[mapping.surface]?.value ?: 0f
+        val p = mapping.parameter
+        val inputRange = p.inputMax - p.inputMin
+        return if (inputRange == 0f) 0.5f else ((raw - p.inputMin) / inputRange).coerceIn(0f, 1f)
     }
 
-    /**
-     * Stop all sounds
-     */
-    private fun stopSound() {
-        audioManager.stopSound()
+    private fun mapWaveform(t: Float, config: ControlParameter.Waveform): Waveform {
+        val startOrdinal = config.startWaveform.ordinal
+        val endOrdinal = config.endWaveform.ordinal
+        val interpolated = (startOrdinal + t * (endOrdinal - startOrdinal)).toInt()
+            .coerceIn(minOf(startOrdinal, endOrdinal), maxOf(startOrdinal, endOrdinal))
+        return Waveform.entries[interpolated]
     }
 
-    /**
-     * Called when touch enters or moves within the box region
-     *
-     * @param inBox Whether the touch is in the box
-     * @param x Normalized X position (0.0-1.0, left to right)
-     * @param y Normalized Y position (0.0-1.0, top to bottom)
-     */
     fun onTouchInBox(x: Float = 0.5f, y: Float = 0.5f) {
         _isTouchInBox.value = true
-
-            _touchX.value = x
-            _touchY.value = y
-            updateParametersFromTouch(x, y)
+        _touchX.value = x
+        _touchY.value = y
+        recompute(settingsViewModel.mappings.value)
     }
 
     fun onReleaseTouch() {
-        stopSound()
+        _isTouchInBox.value = false
+        audioManager.stopSound()
     }
 
     override fun onCleared() {

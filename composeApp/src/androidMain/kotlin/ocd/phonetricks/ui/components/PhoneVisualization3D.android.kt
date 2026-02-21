@@ -107,7 +107,9 @@ actual fun PhoneVisualization3D(
                     childNodes = rememberNodes {
                         add(parentNode)
                     },
-                    isOpaque = false
+                    isOpaque = false,
+                    cameraManipulator = null,
+                    onGestureListener = null,
                 )
 
                 if (onTareRequest != null) {

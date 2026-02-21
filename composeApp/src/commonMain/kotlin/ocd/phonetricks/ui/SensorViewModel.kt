@@ -43,6 +43,7 @@ class SensorViewModel(private val sensorManager: SensorManager) : ViewModel() {
     val gyroscopeHistory = MutableStateFlow<List<Gyroscope>>(emptyList())
     val magnetometerHistory = MutableStateFlow<List<Magnetometer>>(emptyList())
     val rotationVectorHistory = MutableStateFlow<List<RotationVector>>(emptyList())
+    val quaternionHistory: StateFlow<List<RotationVector>> = rotationVectorHistory
     val linearAccelerationHistory = MutableStateFlow<List<LinearAcceleration>>(emptyList())
     val gravityHistory = MutableStateFlow<List<Gravity>>(emptyList())
 
