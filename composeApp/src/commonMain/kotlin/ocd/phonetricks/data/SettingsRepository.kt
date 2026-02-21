@@ -5,6 +5,12 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import ocd.phonetricks.audio.AudioEffect
 import ocd.phonetricks.audio.FilterPreset
+import ocd.phonetricks.audio.MusicalScale
+
+@Serializable
+data class NoteSettings(
+    val scale: MusicalScale = MusicalScale.CHROMATIC,
+)
 
 @Serializable
 data class FxState(
@@ -43,6 +49,19 @@ class SettingsRepository(private val store: SettingsStore) {
 
     fun saveFxState(state: FxState) {
         store.write("fx_state", json.encodeToString(state))
+    }
+
+    fun loadNoteSettings(): NoteSettings {
+        val raw = store.read("note_settings") ?: return NoteSettings()
+        return try {
+            json.decodeFromString(raw)
+        } catch (_: Exception) {
+            NoteSettings()
+        }
+    }
+
+    fun saveNoteSettings(settings: NoteSettings) {
+        store.write("note_settings", json.encodeToString(settings))
     }
 }
 

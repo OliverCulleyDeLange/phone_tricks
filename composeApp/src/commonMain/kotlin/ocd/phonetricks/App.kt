@@ -20,6 +20,8 @@ import ocd.phonetricks.sensor.SensorManager
 import ocd.phonetricks.ui.FxScreen
 import ocd.phonetricks.ui.FxViewModel
 import ocd.phonetricks.ui.MainScreen
+import ocd.phonetricks.ui.NoteSettingsScreen
+import ocd.phonetricks.ui.NoteSettingsViewModel
 import ocd.phonetricks.ui.SensorViewModel
 import ocd.phonetricks.ui.SettingsSheetContent
 import ocd.phonetricks.ui.SettingsViewModel
@@ -48,19 +50,23 @@ fun App(sensorManager: SensorManager, settingsRepository: SettingsRepository) {
         val sensorViewModel = remember { SensorViewModel(sensorManager) }
         val audioManager = remember { createAudioManager() }
         val settingsViewModel = remember { SettingsViewModel(settingsRepository) }
-        val synthesizerViewModel = remember { SynthesizerViewModel(sensorManager, audioManager, settingsViewModel) }
+        val noteSettingsViewModel = remember { NoteSettingsViewModel(settingsRepository) }
+        val synthesizerViewModel = remember { SynthesizerViewModel(sensorManager, audioManager, settingsViewModel, noteSettingsViewModel) }
         val fxViewModel = remember { FxViewModel(audioManager, settingsRepository) }
 
         var showSettings by remember { mutableStateOf(false) }
         var showFx by remember { mutableStateOf(false) }
+        var showNoteSettings by remember { mutableStateOf(false) }
         val settingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val fxSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val noteSettingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
         MainScreen(
             sensorViewModel = sensorViewModel,
             synthesizerViewModel = synthesizerViewModel,
             onOpenSettings = { showSettings = true },
             onOpenFx = { showFx = true },
+            onOpenNoteSettings = { showNoteSettings = true },
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -83,6 +89,18 @@ fun App(sensorManager: SensorManager, settingsRepository: SettingsRepository) {
             ) {
                 FxScreen(
                     fxViewModel = fxViewModel,
+                    modifier = Modifier.fillMaxHeight(0.85f),
+                )
+            }
+        }
+
+        if (showNoteSettings) {
+            ModalBottomSheet(
+                onDismissRequest = { showNoteSettings = false },
+                sheetState = noteSettingsSheetState,
+            ) {
+                NoteSettingsScreen(
+                    viewModel = noteSettingsViewModel,
                     modifier = Modifier.fillMaxHeight(0.85f),
                 )
             }

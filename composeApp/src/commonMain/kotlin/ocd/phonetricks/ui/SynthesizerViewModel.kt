@@ -22,6 +22,7 @@ class SynthesizerViewModel(
     sensorManager: SensorManager,
     private val audioManager: AudioManager,
     private val settingsViewModel: SettingsViewModel,
+    private val noteSettingsViewModel: NoteSettingsViewModel,
 ) : ViewModel() {
 
     private val _rotationVector = MutableStateFlow<RotationVector?>(null)
@@ -111,15 +112,18 @@ class SynthesizerViewModel(
     }
 
     private fun recompute(mappings: List<ControlMapping>) {
-        val pitchMappings = mappings.filterIsInstance<ControlMapping>()
-            .filter { it.parameter is ControlParameter.Pitch }
+        val pitchMappings = mappings.filter { it.parameter is ControlParameter.Pitch }
         val volumeMappings = mappings.filter { it.parameter is ControlParameter.Volume }
         val waveformMappings = mappings.filter { it.parameter is ControlParameter.Waveform }
 
+        val scale = noteSettingsViewModel.scale.value
         val frequency = if (pitchMappings.isEmpty()) _baseFrequency.value else {
-            val p = pitchMappings.first().parameter as ControlParameter.Pitch
-            val t = pitchMappings.map { normalize(it) }.average().toFloat().coerceIn(0f, 1f)
-            p.min + t * (p.max - p.min)
+            pitchMappings.map { mapping ->
+                val p = mapping.parameter as ControlParameter.Pitch
+                val t = normalize(mapping).coerceIn(0f, 1f)
+                val hz = p.min + t * (p.max - p.min)
+                if (p.snapToScale) scale.snapFrequency(hz) else hz
+            }.average().toFloat()
         }
 
         val amplitude = if (volumeMappings.isEmpty()) _amplitude.value else {

@@ -25,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -149,13 +150,13 @@ private fun MappingCard(
             )
 
             when (val p = mapping.parameter) {
-                is ControlParameter.Pitch -> LinearFields(
-                    outMin = p.min, outMax = p.max,
-                    inputMin = p.inputMin, inputMax = p.inputMax,
+                is ControlParameter.Pitch -> PitchFields(
+                    config = p,
                     onOutMinChange = { onParameterChange(p.copy(min = it)) },
                     onOutMaxChange = { onParameterChange(p.copy(max = it)) },
                     onInputMinChange = { onParameterChange(p.copy(inputMin = it)) },
                     onInputMaxChange = { onParameterChange(p.copy(inputMax = it)) },
+                    onSnapToScaleChange = { onParameterChange(p.copy(snapToScale = it)) },
                 )
                 is ControlParameter.Volume -> LinearFields(
                     outMin = p.min, outMax = p.max,
@@ -194,6 +195,33 @@ private fun MappingCard(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun PitchFields(
+    config: ControlParameter.Pitch,
+    onOutMinChange: (Float) -> Unit,
+    onOutMaxChange: (Float) -> Unit,
+    onInputMinChange: (Float) -> Unit,
+    onInputMaxChange: (Float) -> Unit,
+    onSnapToScaleChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text("Snap to scale", style = MaterialTheme.typography.bodyMedium)
+        Switch(checked = config.snapToScale, onCheckedChange = onSnapToScaleChange)
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FloatField("Start", config.min, onOutMinChange, Modifier.weight(1f))
+        FloatField("End", config.max, onOutMaxChange, Modifier.weight(1f))
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FloatField("In Min", config.inputMin, onInputMinChange, Modifier.weight(1f))
+        FloatField("In Max", config.inputMax, onInputMaxChange, Modifier.weight(1f))
     }
 }
 

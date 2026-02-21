@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +37,7 @@ fun MainScreen(
     synthesizerViewModel: SynthesizerViewModel,
     onOpenSettings: () -> Unit,
     onOpenFx: () -> Unit,
+    onOpenNoteSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val rotationVectorData by sensorViewModel.rotationVectorData.collectAsState()
@@ -64,6 +66,7 @@ fun MainScreen(
         onTare = { sensorViewModel.tare() },
         onOpenSettings = onOpenSettings,
         onOpenFx = onOpenFx,
+        onOpenNoteSettings = onOpenNoteSettings,
     )
 }
 
@@ -83,6 +86,7 @@ private fun MainScreenContent(
     onTare: () -> Unit,
     onOpenSettings: () -> Unit = {},
     onOpenFx: () -> Unit = {},
+    onOpenNoteSettings: () -> Unit = {},
 ) {
     Scaffold { paddingValues ->
 
@@ -114,6 +118,9 @@ private fun MainScreenContent(
             ) {
                 IconButton(onClick = onTare) {
                     Icon(Icons.Filled.Refresh, contentDescription = "Tare")
+                }
+                IconButton(onClick = onOpenNoteSettings) {
+                    Icon(Icons.Filled.MusicNote, contentDescription = "Note Settings")
                 }
                 IconButton(onClick = onOpenFx) {
                     Text("FX", style = MaterialTheme.typography.labelMedium)
@@ -194,6 +201,7 @@ fun MainScreenContentPreview() = MaterialTheme {
         rotationVectorData = null,
         onTouchPad = { _, _ -> },
         onReleasePad = {},
-        onTare = {}
+        onTare = {},
+        onOpenNoteSettings = {},
     )
 }

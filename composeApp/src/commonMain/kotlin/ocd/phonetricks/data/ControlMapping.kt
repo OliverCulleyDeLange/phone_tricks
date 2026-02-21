@@ -53,6 +53,7 @@ sealed class ControlParameter {
         val max: Float = 1760f,
         override val inputMin: Float = 0f,
         override val inputMax: Float = 1f,
+        val snapToScale: Boolean = true,
     ) : ControlParameter()
 
     @Serializable
