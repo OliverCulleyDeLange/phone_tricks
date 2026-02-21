@@ -1,22 +1,12 @@
 package ocd.phonetricks.ui.components
 
-import android.R.attr.x
-import android.R.attr.y
-import android.util.Log.w
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import io.github.sceneview.Scene
 import io.github.sceneview.math.Position
@@ -24,7 +14,6 @@ import io.github.sceneview.node.ModelNode
 import io.github.sceneview.node.Node
 import io.github.sceneview.rememberCameraNode
 import io.github.sceneview.rememberEngine
-import io.github.sceneview.rememberEnvironmentLoader
 import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
@@ -35,7 +24,6 @@ import dev.romainguy.kotlin.math.Quaternion
 actual fun PhoneVisualization3D(
     rotationVector: RotationVector,
     modifier: Modifier,
-    onTareRequest: (() -> Unit)?
 ) {
     val engine = rememberEngine()
     val modelLoader = rememberModelLoader(engine)
@@ -111,17 +99,6 @@ actual fun PhoneVisualization3D(
                     cameraManipulator = null,
                     onGestureListener = null,
                 )
-
-                if (onTareRequest != null) {
-                    Button(
-                        onClick = onTareRequest,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(16.dp)
-                    ) {
-                        Icon(Icons.Filled.Refresh, "Tare")
-                    }
-                }
             }
         }
     }

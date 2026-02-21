@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -94,7 +95,6 @@ private fun MainScreenContent(
             rotationVectorData?.let { data ->
                 PhoneVisualization3D(
                     rotationVector = data,
-                    onTareRequest = onTare,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .fillMaxWidth()
@@ -112,6 +112,9 @@ private fun MainScreenContent(
                 modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                IconButton(onClick = onTare) {
+                    Icon(Icons.Filled.Refresh, contentDescription = "Tare")
+                }
                 IconButton(onClick = onOpenFx) {
                     Text("FX", style = MaterialTheme.typography.labelMedium)
                 }
