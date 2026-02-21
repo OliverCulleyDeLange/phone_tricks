@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import ocd.phonetricks.audio.createAudioManager
+import ocd.phonetricks.audio.createSamplePlayer
 import ocd.phonetricks.data.SettingsRepository
 import ocd.phonetricks.sensor.SensorManager
 import ocd.phonetricks.ui.EqScreen
@@ -24,6 +25,8 @@ import ocd.phonetricks.ui.FxViewModel
 import ocd.phonetricks.ui.MainScreen
 import ocd.phonetricks.ui.NoteSettingsScreen
 import ocd.phonetricks.ui.NoteSettingsViewModel
+import ocd.phonetricks.ui.SampleLooperScreen
+import ocd.phonetricks.ui.SampleViewModel
 import ocd.phonetricks.ui.SensorViewModel
 import ocd.phonetricks.ui.SettingsSheetContent
 import ocd.phonetricks.ui.SettingsViewModel
@@ -56,24 +59,29 @@ fun App(sensorManager: SensorManager, settingsRepository: SettingsRepository) {
         val synthesizerViewModel = remember { SynthesizerViewModel(sensorManager, audioManager, settingsViewModel, noteSettingsViewModel) }
         val fxViewModel = remember { FxViewModel(audioManager, settingsRepository) }
         val eqViewModel = remember { EqViewModel(audioManager, settingsRepository) }
+        val sampleViewModel = remember { SampleViewModel(createSamplePlayer()) }
 
         var showSettings by remember { mutableStateOf(false) }
         var showFx by remember { mutableStateOf(false) }
         var showNoteSettings by remember { mutableStateOf(false) }
         var showEq by remember { mutableStateOf(false) }
+        var showSampler by remember { mutableStateOf(false) }
         val settingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val fxSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val noteSettingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val eqSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val samplerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
         MainScreen(
             sensorViewModel = sensorViewModel,
             synthesizerViewModel = synthesizerViewModel,
             eqViewModel = eqViewModel,
+            sampleViewModel = sampleViewModel,
             onOpenSettings = { showSettings = true },
             onOpenFx = { showFx = true },
             onOpenNoteSettings = { showNoteSettings = true },
             onOpenEq = { showEq = true },
+            onOpenSampler = { showSampler = true },
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -120,6 +128,18 @@ fun App(sensorManager: SensorManager, settingsRepository: SettingsRepository) {
             ) {
                 EqScreen(
                     viewModel = eqViewModel,
+                    modifier = Modifier.fillMaxHeight(0.85f),
+                )
+            }
+        }
+
+        if (showSampler) {
+            ModalBottomSheet(
+                onDismissRequest = { showSampler = false },
+                sheetState = samplerSheetState,
+            ) {
+                SampleLooperScreen(
+                    viewModel = sampleViewModel,
                     modifier = Modifier.fillMaxHeight(0.85f),
                 )
             }

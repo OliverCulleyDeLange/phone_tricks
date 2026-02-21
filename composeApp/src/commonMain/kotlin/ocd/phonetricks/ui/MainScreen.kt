@@ -7,10 +7,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Equalizer
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -37,10 +38,12 @@ fun MainScreen(
     sensorViewModel: SensorViewModel,
     synthesizerViewModel: SynthesizerViewModel,
     eqViewModel: EqViewModel,
+    sampleViewModel: SampleViewModel,
     onOpenSettings: () -> Unit,
     onOpenFx: () -> Unit,
     onOpenNoteSettings: () -> Unit,
     onOpenEq: () -> Unit,
+    onOpenSampler: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val rotationVectorData by sensorViewModel.rotationVectorData.collectAsState()
@@ -73,6 +76,7 @@ fun MainScreen(
         onOpenFx = onOpenFx,
         onOpenNoteSettings = onOpenNoteSettings,
         onOpenEq = onOpenEq,
+        onOpenSampler = onOpenSampler,
     )
 }
 
@@ -95,9 +99,9 @@ private fun MainScreenContent(
     onOpenFx: () -> Unit = {},
     onOpenNoteSettings: () -> Unit = {},
     onOpenEq: () -> Unit = {},
+    onOpenSampler: () -> Unit = {},
 ) {
     Scaffold { paddingValues ->
-
         Box(Modifier.fillMaxSize().padding(paddingValues)) {
             DebugInfo(
                 frequency, amplitude, waveformA, waveformB, waveformBlend, spectrum, accelerometerHistory, gyroscopeHistory, quaternionHistory,
@@ -124,6 +128,9 @@ private fun MainScreenContent(
                 modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                IconButton(onClick = onOpenSampler) {
+                    Icon(Icons.Filled.Mic, contentDescription = "Sampler")
+                }
                 IconButton(onClick = onTare) {
                     Icon(Icons.Filled.Refresh, contentDescription = "Tare")
                 }
