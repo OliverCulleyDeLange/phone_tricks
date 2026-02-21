@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.Color
 import ocd.phonetricks.audio.createAudioManager
 import ocd.phonetricks.data.SettingsRepository
 import ocd.phonetricks.sensor.SensorManager
+import ocd.phonetricks.ui.EqScreen
+import ocd.phonetricks.ui.EqViewModel
 import ocd.phonetricks.ui.FxScreen
 import ocd.phonetricks.ui.FxViewModel
 import ocd.phonetricks.ui.MainScreen
@@ -53,20 +55,25 @@ fun App(sensorManager: SensorManager, settingsRepository: SettingsRepository) {
         val noteSettingsViewModel = remember { NoteSettingsViewModel(settingsRepository) }
         val synthesizerViewModel = remember { SynthesizerViewModel(sensorManager, audioManager, settingsViewModel, noteSettingsViewModel) }
         val fxViewModel = remember { FxViewModel(audioManager, settingsRepository) }
+        val eqViewModel = remember { EqViewModel(audioManager, settingsRepository) }
 
         var showSettings by remember { mutableStateOf(false) }
         var showFx by remember { mutableStateOf(false) }
         var showNoteSettings by remember { mutableStateOf(false) }
+        var showEq by remember { mutableStateOf(false) }
         val settingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val fxSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val noteSettingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val eqSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
         MainScreen(
             sensorViewModel = sensorViewModel,
             synthesizerViewModel = synthesizerViewModel,
+            eqViewModel = eqViewModel,
             onOpenSettings = { showSettings = true },
             onOpenFx = { showFx = true },
             onOpenNoteSettings = { showNoteSettings = true },
+            onOpenEq = { showEq = true },
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -101,6 +108,18 @@ fun App(sensorManager: SensorManager, settingsRepository: SettingsRepository) {
             ) {
                 NoteSettingsScreen(
                     viewModel = noteSettingsViewModel,
+                    modifier = Modifier.fillMaxHeight(0.85f),
+                )
+            }
+        }
+
+        if (showEq) {
+            ModalBottomSheet(
+                onDismissRequest = { showEq = false },
+                sheetState = eqSheetState,
+            ) {
+                EqScreen(
+                    viewModel = eqViewModel,
                     modifier = Modifier.fillMaxHeight(0.85f),
                 )
             }

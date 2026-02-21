@@ -15,6 +15,8 @@ class AndroidAudioManager : AudioManager {
     private external fun nativeRelease(synthPtr: Long)
     private external fun nativeSetEffect(synthPtr: Long, effectId: Int, wetDry: Float)
     private external fun nativeSetFilter(synthPtr: Long, presetId: Int, frequency: Float, wetDry: Float)
+    private external fun nativeGetSpectrum(synthPtr: Long): FloatArray
+    private external fun nativeSetEqBands(synthPtr: Long, frequencies: FloatArray, gains: FloatArray, qs: FloatArray)
 
     private var synthesizerPtr: Long = 0
     private var isPlaying = false
@@ -53,6 +55,21 @@ class AndroidAudioManager : AudioManager {
 
     override fun setFilter(preset: FilterPreset, frequency: Float, wetDry: Float) {
         nativeSetFilter(synthesizerPtr, preset.ordinal, frequency, wetDry)
+    }
+
+    override fun getSpectrumData(): FloatArray {
+        if (synthesizerPtr == 0L) return FloatArray(512)
+        return nativeGetSpectrum(synthesizerPtr)
+    }
+
+    override fun setEqBands(bands: List<EqBand>) {
+        if (synthesizerPtr == 0L) return
+        nativeSetEqBands(
+            synthesizerPtr,
+            bands.map { it.frequency }.toFloatArray(),
+            bands.map { it.gainDb }.toFloatArray(),
+            bands.map { it.q }.toFloatArray(),
+        )
     }
 
     override fun release() {

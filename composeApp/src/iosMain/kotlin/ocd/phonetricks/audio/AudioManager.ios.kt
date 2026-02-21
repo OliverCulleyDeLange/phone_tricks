@@ -3,6 +3,7 @@ package ocd.phonetricks.audio
 import kotlinx.cinterop.*
 import platform.AVFAudio.*
 import platform.Foundation.*
+import platform.Accelerate.*
 import kotlin.math.*
 
 actual fun createAudioManager(): AudioManager = IOSAudioManager()
@@ -37,10 +38,21 @@ class IOSAudioManager : AudioManager {
     private var filterFrequency = 1000f
     private var filterWetDry = 0f
 
+    private var eqBands: List<EqBand> = emptyList()
+    private val eqBiquads = mutableListOf<IirBiquad>()
+
+    private val spectrumSize = 512
+    private val fftSize = 1024
+    private val fftAccum = FloatArray(fftSize)
+    private var fftAccumPos = 0
+    private var fftBufferCount = 0
+    private var spectrumData = FloatArray(spectrumSize)
+
     init {
         setupAudioEngine()
     }
 
+    @OptIn(ExperimentalForeignApi::class)
     private fun setupAudioEngine() {
         audioEngine.attachNode(playerNode)
         audioEngine.attachNode(reverbNode)
@@ -106,6 +118,16 @@ class IOSAudioManager : AudioManager {
         filterWetDry = wetDry
     }
 
+    override fun getSpectrumData(): FloatArray = spectrumData.copyOf()
+
+    override fun setEqBands(bands: List<EqBand>) {
+        eqBands = bands
+        eqBiquads.clear()
+        bands.forEach { band ->
+            eqBiquads.add(IirBiquad().apply { setPeaking(band.frequency, sampleRate.toFloat(), band.gainDb, band.q) })
+        }
+    }
+
     override fun release() {
         isPlaying = false
         isSynthPlaying = false
@@ -133,7 +155,7 @@ class IOSAudioManager : AudioManager {
     private fun applyBitcrusher(sample: Float, amount: Float): Float {
         val bits = (1.0f + (1.0f - amount) * 14.0f).toInt()
         val levels = 2f.pow(bits.toFloat())
-        return kotlin.math.roundToInt(sample * levels).toFloat() / levels
+        return kotlin.math.round(sample * levels.toDouble()).toFloat() / levels
     }
 
     private fun applySimpleFilter(samples: FloatArray, size: Int) {
@@ -218,6 +240,21 @@ class IOSAudioManager : AudioManager {
         applySimpleFilter(rawSamples, bufferSize)
 
         for (i in 0 until bufferSize) {
+            var s = rawSamples[i]
+            for (bq in eqBiquads) s = bq.process(s)
+            rawSamples[i] = s
+
+            fftAccum[fftAccumPos++] = s
+            if (fftAccumPos >= fftSize) {
+                fftAccumPos = 0
+                fftBufferCount++
+                if (fftBufferCount % 4 == 0) {
+                    spectrumData = computeSpectrum(fftAccum, fftSize, spectrumSize)
+                }
+            }
+        }
+
+        for (i in 0 until bufferSize) {
             samples[i] = rawSamples[i]
         }
 
@@ -232,5 +269,78 @@ class IOSAudioManager : AudioManager {
     }
 }
 
-private fun Float.pow(exp: Float): Float = kotlin.math.pow(this.toDouble(), exp.toDouble()).toFloat()
-private fun kotlin.math.roundToInt(x: Float): Int = kotlin.math.round(x.toDouble()).toInt()
+private class IirBiquad {
+    private var b0 = 1f; private var b1 = 0f; private var b2 = 0f
+    private var a1 = 0f; private var a2 = 0f
+    private var x1 = 0f; private var x2 = 0f
+    private var y1 = 0f; private var y2 = 0f
+
+    fun setPeaking(freq: Float, sr: Float, gainDb: Float, q: Float) {
+        val A = 10f.pow(gainDb / 40f)
+        val w0 = 2f * PI.toFloat() * freq / sr
+        val alpha = sin(w0) / (2f * q)
+        val a0 = 1f + alpha / A
+        b0 = (1f + alpha * A) / a0
+        b1 = (-2f * cos(w0)) / a0
+        b2 = (1f - alpha * A) / a0
+        a1 = (-2f * cos(w0)) / a0
+        a2 = (1f - alpha / A) / a0
+    }
+
+    fun process(input: Float): Float {
+        val out = b0 * input + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+        x2 = x1; x1 = input; y2 = y1; y1 = out
+        return out
+    }
+}
+
+private fun Float.pow(exp: Float): Float = this.toDouble().pow(exp.toDouble()).toFloat()
+
+private fun computeSpectrum(input: FloatArray, fftSize: Int, bands: Int): FloatArray {
+    val re = FloatArray(fftSize)
+    val im = FloatArray(fftSize)
+    for (i in 0 until fftSize) {
+        val hann = 0.5f * (1f - cos(2f * PI.toFloat() * i / (fftSize - 1)))
+        re[i] = input[i] * hann
+    }
+    ktFft(re, im, fftSize)
+    val out = FloatArray(bands)
+    for (k in 0 until bands) {
+        val mag = sqrt(re[k] * re[k] + im[k] * im[k]) / fftSize
+        val db = if (mag > 0f) (20f * log10(mag) + 80f) / 80f else 0f
+        out[k] = db.coerceIn(0f, 1f)
+    }
+    return out
+}
+
+private fun ktFft(re: FloatArray, im: FloatArray, n: Int) {
+    var j = 0
+    for (i in 1 until n) {
+        var bit = n shr 1
+        while (j and bit != 0) { j = j xor bit; bit = bit shr 1 }
+        j = j xor bit
+        if (i < j) { re[i] = re[j].also { re[j] = re[i] }; im[i] = im[j].also { im[j] = im[i] } }
+    }
+    var len = 2
+    while (len <= n) {
+        val halfLen = len / 2
+        val ang = -2f * PI.toFloat() / len
+        val wRe = cos(ang); val wIm = sin(ang)
+        var i = 0
+        while (i < n) {
+            var curRe = 1f; var curIm = 0f
+            for (k in 0 until halfLen) {
+                val uRe = re[i + k]; val uIm = im[i + k]
+                val vRe = re[i + k + halfLen] * curRe - im[i + k + halfLen] * curIm
+                val vIm = re[i + k + halfLen] * curIm + im[i + k + halfLen] * curRe
+                re[i + k] = uRe + vRe; im[i + k] = uIm + vIm
+                re[i + k + halfLen] = uRe - vRe; im[i + k + halfLen] = uIm - vIm
+                val newCurRe = curRe * wRe - curIm * wIm
+                curIm = curRe * wIm + curIm * wRe
+                curRe = newCurRe
+            }
+            i += len
+        }
+        len = len shl 1
+    }
+}

@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import ocd.phonetricks.audio.AudioEffect
+import ocd.phonetricks.audio.EqBand
 import ocd.phonetricks.audio.FilterPreset
 import ocd.phonetricks.audio.MusicalScale
 
@@ -62,6 +63,19 @@ class SettingsRepository(private val store: SettingsStore) {
 
     fun saveNoteSettings(settings: NoteSettings) {
         store.write("note_settings", json.encodeToString(settings))
+    }
+
+    fun loadEqBands(): List<EqBand> {
+        val raw = store.read("eq_bands") ?: return emptyList()
+        return try {
+            json.decodeFromString(raw)
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveEqBands(bands: List<EqBand>) {
+        store.write("eq_bands", json.encodeToString(bands))
     }
 }
 

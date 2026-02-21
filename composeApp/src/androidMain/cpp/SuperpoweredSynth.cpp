@@ -4,6 +4,7 @@
 #include <atomic>
 #include <mutex>
 #include <cstring>
+#include <vector>
 #include "superpowered/SuperpoweredSimple.h"
 #include "superpowered/SuperpoweredAndroidAudioIO.h"
 
@@ -16,6 +17,35 @@ enum EffectId { FX_ECHO = 0, FX_DELAY = 1, FX_BITCRUSHER = 2, FX_REVERB = 3, FX_
 enum FilterPresetId { F_LOWPASS = 0, F_HIGHPASS = 1, F_LOWSHELF = 2, F_HIGHSHELF = 3, F_BANDPASS = 4, F_NOTCH = 5, F_PARAMETRIC = 6 };
 
 static const int MAX_DELAY_SAMPLES = 88200;
+
+static const int FFT_SIZE = 2048;
+static const int SPECTRUM_BANDS = 512;
+
+static void fft_inplace(float* re, float* im, int n) {
+    for (int i = 1, j = 0; i < n; i++) {
+        int bit = n >> 1;
+        for (; j & bit; bit >>= 1) j ^= bit;
+        j ^= bit;
+        if (i < j) { std::swap(re[i], re[j]); std::swap(im[i], im[j]); }
+    }
+    for (int len = 2; len <= n; len <<= 1) {
+        float ang = -2.0f * (float)M_PI / len;
+        float wRe = cosf(ang), wIm = sinf(ang);
+        for (int i = 0; i < n; i += len) {
+            float curRe = 1.0f, curIm = 0.0f;
+            for (int k = 0; k < len / 2; k++) {
+                float uRe = re[i+k], uIm = im[i+k];
+                float vRe = re[i+k+len/2]*curRe - im[i+k+len/2]*curIm;
+                float vIm = re[i+k+len/2]*curIm + im[i+k+len/2]*curRe;
+                re[i+k] = uRe+vRe; im[i+k] = uIm+vIm;
+                re[i+k+len/2] = uRe-vRe; im[i+k+len/2] = uIm-vIm;
+                float nr = curRe*wRe - curIm*wIm;
+                curIm = curRe*wIm + curIm*wRe;
+                curRe = nr;
+            }
+        }
+    }
+}
 
 struct EchoDelay {
     float buffer[MAX_DELAY_SAMPLES] = {};
@@ -163,6 +193,13 @@ struct BiquadFilter {
     }
 };
 
+struct EqBandState {
+    float frequency;
+    float gainDb;
+    float q;
+    BiquadFilter filter;
+};
+
 class SuperpoweredSynthesizer {
 public:
     SuperpoweredSynthesizer() :
@@ -258,6 +295,38 @@ private:
     SimpleComb comb1, comb2, comb3, comb4;
     BiquadFilter biquad;
     float whooshPhase;
+
+    float fftInputBuffer[FFT_SIZE] = {};
+    int fftWritePos = 0;
+    std::vector<float> spectrumData;
+    std::mutex spectrumMutex;
+
+    std::vector<EqBandState> eqBands;
+
+    void rebuildEqBand(EqBandState& band) {
+        band.filter.setParametric(band.frequency, (float)samplerate, band.gainDb, band.q);
+    }
+
+public:
+    void setEqBands(int count, float* frequencies, float* gainsDb, float* qs) {
+        std::lock_guard<std::mutex> lock(mutex);
+        eqBands.resize(count);
+        for (int i = 0; i < count; i++) {
+            eqBands[i].frequency = frequencies[i];
+            eqBands[i].gainDb = gainsDb[i];
+            eqBands[i].q = qs[i];
+            rebuildEqBand(eqBands[i]);
+        }
+    }
+
+    void getSpectrum(float* out, int size) {
+        std::lock_guard<std::mutex> lock(spectrumMutex);
+        int copy = std::min(size, (int)spectrumData.size());
+        for (int i = 0; i < copy; i++) out[i] = spectrumData[i];
+        for (int i = copy; i < size; i++) out[i] = 0.0f;
+    }
+
+private:
 
     void rebuildFilter() {
         float sr = (float)samplerate;
@@ -380,6 +449,30 @@ private:
                 sample = sample * (1.0f - filterWetDry) + filtered * filterWetDry;
             }
 
+            for (auto& band : eqBands) {
+                sample = band.filter.process(sample);
+            }
+
+            fftInputBuffer[fftWritePos++] = sample;
+            if (fftWritePos >= FFT_SIZE) {
+                fftWritePos = 0;
+                float re[FFT_SIZE], im[FFT_SIZE] = {};
+                for (int j = 0; j < FFT_SIZE; j++) {
+                    float hann = 0.5f * (1.0f - cosf(2.0f * M_PI * j / (FFT_SIZE - 1)));
+                    re[j] = fftInputBuffer[j] * hann;
+                }
+                fft_inplace(re, im, FFT_SIZE);
+                std::vector<float> mag(SPECTRUM_BANDS);
+                for (int j = 0; j < SPECTRUM_BANDS; j++) {
+                    float m = sqrtf(re[j]*re[j] + im[j]*im[j]) / FFT_SIZE;
+                    mag[j] = (m > 0.0f) ? (20.0f * log10f(m) + 80.0f) / 80.0f : 0.0f;
+                    if (mag[j] < 0.0f) mag[j] = 0.0f;
+                    if (mag[j] > 1.0f) mag[j] = 1.0f;
+                }
+                std::lock_guard<std::mutex> slock(spectrumMutex);
+                spectrumData = mag;
+            }
+
             short int out = (short int)(fmaxf(-1.0f, fminf(1.0f, sample)) * 32767.0f);
             output[i * 2] = out;
             output[i * 2 + 1] = out;
@@ -427,6 +520,33 @@ Java_ocd_phonetricks_audio_AndroidAudioManager_nativeSetFilter(
         JNIEnv *env, jobject thiz, jlong synth_ptr, jint preset_id, jfloat frequency, jfloat wet_dry) {
     auto *synth = reinterpret_cast<SuperpoweredSynthesizer *>(synth_ptr);
     if (synth) synth->setFilter(preset_id, frequency, wet_dry);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_ocd_phonetricks_audio_AndroidAudioManager_nativeGetSpectrum(JNIEnv *env, jobject thiz, jlong synth_ptr) {
+    auto *synth = reinterpret_cast<SuperpoweredSynthesizer *>(synth_ptr);
+    jfloatArray result = env->NewFloatArray(SPECTRUM_BANDS);
+    if (!synth || !result) return result;
+    float buf[SPECTRUM_BANDS];
+    synth->getSpectrum(buf, SPECTRUM_BANDS);
+    env->SetFloatArrayRegion(result, 0, SPECTRUM_BANDS, buf);
+    return result;
+}
+
+JNIEXPORT void JNICALL
+Java_ocd_phonetricks_audio_AndroidAudioManager_nativeSetEqBands(
+        JNIEnv *env, jobject thiz, jlong synth_ptr,
+        jfloatArray frequencies, jfloatArray gains, jfloatArray qs) {
+    auto *synth = reinterpret_cast<SuperpoweredSynthesizer *>(synth_ptr);
+    if (!synth) return;
+    int count = env->GetArrayLength(frequencies);
+    float* freqBuf = env->GetFloatArrayElements(frequencies, nullptr);
+    float* gainBuf = env->GetFloatArrayElements(gains, nullptr);
+    float* qBuf    = env->GetFloatArrayElements(qs, nullptr);
+    synth->setEqBands(count, freqBuf, gainBuf, qBuf);
+    env->ReleaseFloatArrayElements(frequencies, freqBuf, JNI_ABORT);
+    env->ReleaseFloatArrayElements(gains, gainBuf, JNI_ABORT);
+    env->ReleaseFloatArrayElements(qs, qBuf, JNI_ABORT);
 }
 
 } // extern "C"

@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,9 +36,11 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 fun MainScreen(
     sensorViewModel: SensorViewModel,
     synthesizerViewModel: SynthesizerViewModel,
+    eqViewModel: EqViewModel,
     onOpenSettings: () -> Unit,
     onOpenFx: () -> Unit,
     onOpenNoteSettings: () -> Unit,
+    onOpenEq: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val rotationVectorData by sensorViewModel.rotationVectorData.collectAsState()
@@ -50,6 +53,7 @@ fun MainScreen(
     val waveformA by synthesizerViewModel.waveformA.collectAsState()
     val waveformB by synthesizerViewModel.waveformB.collectAsState()
     val waveformBlend by synthesizerViewModel.waveformBlend.collectAsState()
+    val spectrum by eqViewModel.spectrum.collectAsState()
 
     MainScreenContent(
         frequency,
@@ -57,6 +61,7 @@ fun MainScreen(
         waveformA,
         waveformB,
         waveformBlend,
+        spectrum,
         accelerometerHistory,
         gyroscopeHistory,
         quaternionHistory,
@@ -67,6 +72,7 @@ fun MainScreen(
         onOpenSettings = onOpenSettings,
         onOpenFx = onOpenFx,
         onOpenNoteSettings = onOpenNoteSettings,
+        onOpenEq = onOpenEq,
     )
 }
 
@@ -77,6 +83,7 @@ private fun MainScreenContent(
     waveformA: Waveform,
     waveformB: Waveform,
     waveformBlend: Float,
+    spectrum: FloatArray,
     accelerometerHistory: List<Accelerometer>,
     gyroscopeHistory: List<Gyroscope>,
     quaternionHistory: List<RotationVector>,
@@ -87,12 +94,13 @@ private fun MainScreenContent(
     onOpenSettings: () -> Unit = {},
     onOpenFx: () -> Unit = {},
     onOpenNoteSettings: () -> Unit = {},
+    onOpenEq: () -> Unit = {},
 ) {
     Scaffold { paddingValues ->
 
         Box(Modifier.fillMaxSize().padding(paddingValues)) {
             DebugInfo(
-                frequency, amplitude, waveformA, waveformB, waveformBlend, accelerometerHistory, gyroscopeHistory, quaternionHistory,
+                frequency, amplitude, waveformA, waveformB, waveformBlend, spectrum, accelerometerHistory, gyroscopeHistory, quaternionHistory,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
 
@@ -122,6 +130,9 @@ private fun MainScreenContent(
                 IconButton(onClick = onOpenNoteSettings) {
                     Icon(Icons.Filled.MusicNote, contentDescription = "Note Settings")
                 }
+                IconButton(onClick = onOpenEq) {
+                    Icon(Icons.Filled.Equalizer, contentDescription = "EQ")
+                }
                 IconButton(onClick = onOpenFx) {
                     Text("FX", style = MaterialTheme.typography.labelMedium)
                 }
@@ -140,6 +151,7 @@ private fun DebugInfo(
     waveformA: Waveform,
     waveformB: Waveform,
     waveformBlend: Float,
+    spectrum: FloatArray,
     accelerometerHistory: List<Accelerometer>,
     gyroscopeHistory: List<Gyroscope>,
     quaternionHistory: List<RotationVector>,
@@ -148,6 +160,11 @@ private fun DebugInfo(
     Column(
         modifier = modifier.padding(24.dp)
     ) {
+        SpectrumAnalyserCanvas(
+            spectrum = spectrum,
+            modifier = Modifier.fillMaxWidth().height(80.dp)
+        )
+
         SynthParametersCard(
             frequency = frequency,
             amplitude = amplitude,
@@ -195,6 +212,7 @@ fun MainScreenContentPreview() = MaterialTheme {
         waveformA = Waveform.SINE,
         waveformB = Waveform.SQUARE,
         waveformBlend = 0f,
+        spectrum = FloatArray(512),
         accelerometerHistory = emptyList(),
         gyroscopeHistory = emptyList(),
         quaternionHistory = emptyList(),
@@ -203,5 +221,6 @@ fun MainScreenContentPreview() = MaterialTheme {
         onReleasePad = {},
         onTare = {},
         onOpenNoteSettings = {},
+        onOpenEq = {},
     )
 }

@@ -49,7 +49,19 @@ interface AudioManager {
      * @param wetDry The mix level of the filter (0.0-1.0)
      */
     fun setFilter(preset: FilterPreset, frequency: Float, wetDry: Float)
+
+    fun getSpectrumData(): FloatArray
+
+    fun setEqBands(bands: List<EqBand>)
 }
+
+@Serializable
+data class EqBand(
+    val id: Int,
+    val frequency: Float,
+    val gainDb: Float,
+    val q: Float = 1.4f,
+)
 
 /**
  * Waveform types for the synthesizer.

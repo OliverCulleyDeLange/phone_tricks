@@ -7,8 +7,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import ocd.phonetricks.audio.AudioEffect
 import ocd.phonetricks.audio.AudioManager
+import kotlin.math.ln
+import kotlin.math.pow
 import ocd.phonetricks.audio.FilterPreset
 import ocd.phonetricks.audio.Waveform
 import ocd.phonetricks.data.Accelerometer
@@ -118,12 +119,22 @@ class SynthesizerViewModel(
 
         val scale = noteSettingsViewModel.scale.value
         val frequency = if (pitchMappings.isEmpty()) _baseFrequency.value else {
-            pitchMappings.map { mapping ->
+            val first = pitchMappings.first()
+            val fp = first.parameter as ControlParameter.Pitch
+            val ft = normalize(first).coerceIn(0f, 1f)
+            val baseHz = fp.min + ft * (fp.max - fp.min)
+            val snappedBaseHz = if (fp.snapToScale) scale.snapFrequency(baseHz) else baseHz
+            val baseSemitones = 12.0 * ln(snappedBaseHz.toDouble() / 16.35) / ln(2.0)
+            val totalSemitones = pitchMappings.drop(1).fold(baseSemitones) { acc, mapping ->
                 val p = mapping.parameter as ControlParameter.Pitch
                 val t = normalize(mapping).coerceIn(0f, 1f)
-                val hz = p.min + t * (p.max - p.min)
-                if (p.snapToScale) scale.snapFrequency(hz) else hz
-            }.average().toFloat()
+                val rangeInSemitones = 12.0 * ln(p.max.toDouble() / p.min) / ln(2.0)
+                val offsetSemitones = (t - 0.5) * rangeInSemitones
+                val offsetHz = 16.35 * 2.0.pow((acc + offsetSemitones) / 12.0)
+                val finalHz = if (p.snapToScale) scale.snapFrequency(offsetHz.toFloat()).toDouble() else offsetHz
+                12.0 * ln(finalHz / 16.35) / ln(2.0)
+            }
+            (16.35 * 2.0.pow(totalSemitones / 12.0)).toFloat()
         }
 
         val amplitude = if (volumeMappings.isEmpty()) _amplitude.value else {
