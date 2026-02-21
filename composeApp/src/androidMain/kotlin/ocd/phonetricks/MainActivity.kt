@@ -4,7 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.lifecycle.lifecycleScope
+import ocd.phonetricks.data.SettingsRepository
+import ocd.phonetricks.data.createSettingsStore
 import ocd.phonetricks.sensor.createSensorManager
 
 class MainActivity : ComponentActivity() {
@@ -13,9 +14,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val sensorManager = createSensorManager(this)
+        val settingsRepository = SettingsRepository(createSettingsStore(this))
 
         setContent {
-            App(sensorManager)
+            App(sensorManager, settingsRepository)
         }
     }
 }

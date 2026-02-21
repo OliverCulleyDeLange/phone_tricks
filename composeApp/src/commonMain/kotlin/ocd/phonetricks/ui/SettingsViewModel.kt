@@ -7,23 +7,26 @@ import kotlinx.coroutines.flow.asStateFlow
 import ocd.phonetricks.data.ControlMapping
 import ocd.phonetricks.data.ControlParameter
 import ocd.phonetricks.data.ControlSurface
+import ocd.phonetricks.data.SettingsRepository
 import ocd.phonetricks.data.defaultInputRange
-import ocd.phonetricks.data.defaultMappings
 
-class SettingsViewModel : ViewModel() {
-    private val _mappings = MutableStateFlow<List<ControlMapping>>(defaultMappings)
+class SettingsViewModel(private val repository: SettingsRepository) : ViewModel() {
+    private val _mappings = MutableStateFlow<List<ControlMapping>>(repository.loadMappings())
     val mappings: StateFlow<List<ControlMapping>> = _mappings.asStateFlow()
 
     fun addMapping(mapping: ControlMapping) {
         _mappings.value = _mappings.value + mapping
+        repository.saveMappings(_mappings.value)
     }
 
     fun removeMapping(index: Int) {
         _mappings.value = _mappings.value.toMutableList().also { it.removeAt(index) }
+        repository.saveMappings(_mappings.value)
     }
 
     fun updateMapping(index: Int, mapping: ControlMapping) {
         _mappings.value = _mappings.value.toMutableList().also { it[index] = mapping }
+        repository.saveMappings(_mappings.value)
     }
 
     fun updateSurface(index: Int, surface: ControlSurface) {

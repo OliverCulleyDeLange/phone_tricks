@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import ocd.phonetricks.audio.createAudioManager
+import ocd.phonetricks.data.SettingsRepository
 import ocd.phonetricks.sensor.SensorManager
 import ocd.phonetricks.ui.FxScreen
 import ocd.phonetricks.ui.FxViewModel
@@ -42,13 +43,13 @@ private val AppColorScheme = darkColorScheme(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun App(sensorManager: SensorManager) {
+fun App(sensorManager: SensorManager, settingsRepository: SettingsRepository) {
     MaterialTheme(colorScheme = AppColorScheme) {
         val sensorViewModel = remember { SensorViewModel(sensorManager) }
         val audioManager = remember { createAudioManager() }
-        val settingsViewModel = remember { SettingsViewModel() }
+        val settingsViewModel = remember { SettingsViewModel(settingsRepository) }
         val synthesizerViewModel = remember { SynthesizerViewModel(sensorManager, audioManager, settingsViewModel) }
-        val fxViewModel = remember { FxViewModel(audioManager) }
+        val fxViewModel = remember { FxViewModel(audioManager, settingsRepository) }
 
         var showSettings by remember { mutableStateOf(false) }
         var showFx by remember { mutableStateOf(false) }
@@ -88,4 +89,3 @@ fun App(sensorManager: SensorManager) {
         }
     }
 }
-

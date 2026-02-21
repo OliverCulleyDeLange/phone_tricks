@@ -1,11 +1,13 @@
 package ocd.phonetricks.data
 
+import kotlinx.serialization.Serializable
 import ocd.phonetricks.audio.AudioEffect
 import ocd.phonetricks.audio.FilterPreset
 import ocd.phonetricks.audio.Waveform
 import ocd.phonetricks.audio.Waveform.SINE
 import ocd.phonetricks.audio.Waveform.SQUARE
 
+@Serializable
 enum class ControlSurface {
     TOUCH_X,
     TOUCH_Y,
@@ -32,10 +34,12 @@ fun ControlSurface.defaultInputRange(): Pair<Float, Float> = when (this) {
     ControlSurface.QUATERNION_Z, ControlSurface.QUATERNION_W -> -1f to 1f
 }
 
+@Serializable
 sealed class ControlParameter {
     abstract val inputMin: Float
     abstract val inputMax: Float
 
+    @Serializable
     data class Volume(
         val min: Float = 0.1f,
         val max: Float = 1.0f,
@@ -43,6 +47,7 @@ sealed class ControlParameter {
         override val inputMax: Float = 1f,
     ) : ControlParameter()
 
+    @Serializable
     data class Pitch(
         val min: Float = 110f,
         val max: Float = 1760f,
@@ -50,6 +55,7 @@ sealed class ControlParameter {
         override val inputMax: Float = 1f,
     ) : ControlParameter()
 
+    @Serializable
     data class Waveform(
         val startWaveform: ocd.phonetricks.audio.Waveform = SINE,
         val endWaveform: ocd.phonetricks.audio.Waveform = SQUARE,
@@ -57,12 +63,14 @@ sealed class ControlParameter {
         override val inputMax: Float = 1f,
     ) : ControlParameter()
 
+    @Serializable
     data class EffectWetDry(
         val effect: AudioEffect = AudioEffect.ECHO,
         override val inputMin: Float = 0f,
         override val inputMax: Float = 1f,
     ) : ControlParameter()
 
+    @Serializable
     data class FilterFrequency(
         val preset: FilterPreset = FilterPreset.LOW_PASS,
         val min: Float = 20f,
@@ -71,6 +79,7 @@ sealed class ControlParameter {
         override val inputMax: Float = 1f,
     ) : ControlParameter()
 
+    @Serializable
     data class FilterWetDry(
         val preset: FilterPreset = FilterPreset.LOW_PASS,
         override val inputMin: Float = 0f,
@@ -78,6 +87,7 @@ sealed class ControlParameter {
     ) : ControlParameter()
 }
 
+@Serializable
 data class ControlMapping(
     val surface: ControlSurface,
     val parameter: ControlParameter,

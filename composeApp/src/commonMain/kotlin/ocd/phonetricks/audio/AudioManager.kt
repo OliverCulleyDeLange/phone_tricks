@@ -1,5 +1,7 @@
 package ocd.phonetricks.audio
 
+import kotlinx.serialization.Serializable
+
 /**
  * Platform-specific audio manager for playing synthesized sounds.
  */
@@ -52,6 +54,7 @@ interface AudioManager {
 /**
  * Waveform types for the synthesizer.
  */
+@Serializable
 enum class Waveform {
     SINE,
     SQUARE,
@@ -62,6 +65,7 @@ enum class Waveform {
 /**
  * Audio effects that can be applied to sounds.
  */
+@Serializable
 enum class AudioEffect {
     ECHO,
     DELAY,
@@ -86,6 +90,7 @@ enum class AudioEffect {
 /**
  * Filter presets for shaping audio frequency response.
  */
+@Serializable
 enum class FilterPreset {
     LOW_PASS,
     HIGH_PASS,

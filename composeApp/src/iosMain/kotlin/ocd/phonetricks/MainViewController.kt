@@ -1,15 +1,13 @@
 package ocd.phonetricks
 
 import androidx.compose.ui.window.ComposeUIViewController
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import ocd.phonetricks.data.SettingsRepository
+import ocd.phonetricks.data.createSettingsStore
 import ocd.phonetricks.sensor.createSensorManager
 
 fun MainViewController() = ComposeUIViewController {
     val sensorManager = createSensorManager()
-    val fileWriter = createFileWriter()
-    val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    val settingsRepository = SettingsRepository(createSettingsStore(null))
 
-    App(sensorManager, fileWriter, coroutineScope)
+    App(sensorManager, settingsRepository)
 }
