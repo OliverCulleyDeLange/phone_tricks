@@ -9,9 +9,17 @@ interface AudioManager {
      *
      * @param frequency The base frequency in Hz (20-20000)
      * @param amplitude The volume level (0.0-1.0)
-     * @param waveform The type of waveform to generate (sine, square, etc.)
+     * @param waveformA The starting waveform
+     * @param waveformB The ending waveform to blend toward
+     * @param blend Crossfade factor: 0.0 = fully waveformA, 1.0 = fully waveformB
      */
-    fun playSynthSound(frequency: Float, amplitude: Float, waveform: Waveform = Waveform.SINE)
+    fun playSynthSound(
+        frequency: Float,
+        amplitude: Float,
+        waveformA: Waveform = Waveform.SINE,
+        waveformB: Waveform = Waveform.SINE,
+        blend: Float = 0f,
+    )
 
     /**
      * Stop all sounds.

@@ -1,5 +1,6 @@
 package ocd.phonetricks.data
 
+import ocd.phonetricks.audio.Waveform
 import ocd.phonetricks.audio.Waveform.SINE
 import ocd.phonetricks.audio.Waveform.SQUARE
 
@@ -66,8 +67,8 @@ val defaultMappings: List<ControlMapping> = listOf(
         ControlSurface.TOUCH_X.defaultInputRange().first,
         ControlSurface.TOUCH_X.defaultInputRange().second
     )),
-    ControlMapping(ControlSurface.TOUCH_Y, ControlParameter.Volume(
-        0.1f, 0.5f,
+    ControlMapping(ControlSurface.TOUCH_Y, ControlParameter.Waveform(
+        Waveform.SINE, Waveform.SQUARE,
         ControlSurface.TOUCH_Y.defaultInputRange().first,
         ControlSurface.TOUCH_Y.defaultInputRange().second)
     ),

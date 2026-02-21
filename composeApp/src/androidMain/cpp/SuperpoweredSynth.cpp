@@ -24,7 +24,9 @@ public:
             audioIO(nullptr),
             frequency(440.0f),
             amplitude(0.5f),
-            waveform(SINE),
+            waveformA(SINE),
+            waveformB(SINE),
+            blend(0.0f),
             playing(false),
             phase(0.0f),
             samplerate(44100) {
@@ -50,11 +52,13 @@ public:
         delete audioIO;
     }
 
-    void playSound(float freq, float amp, int waveformType) {
+    void playSound(float freq, float amp, int waveformTypeA, int waveformTypeB, float blendFactor) {
         std::lock_guard<std::mutex> lock(mutex);
         frequency = freq;
         amplitude = amp;
-        waveform = static_cast<WaveformType>(waveformType);
+        waveformA = static_cast<WaveformType>(waveformTypeA);
+        waveformB = static_cast<WaveformType>(waveformTypeB);
+        blend = blendFactor;
         playing = true;
     }
 
@@ -67,15 +71,16 @@ private:
     SuperpoweredAndroidAudioIO *audioIO;
     float frequency;
     float amplitude;
-    WaveformType waveform;
+    WaveformType waveformA;
+    WaveformType waveformB;
+    float blend;
     std::atomic<bool> playing;
     float phase;
     unsigned int samplerate;
     std::mutex mutex;
 
-    // Generates a single sample based on the current waveform type and phase
-    float generateSample(float phaseValue) {
-        switch (waveform) {
+    float generateSample(WaveformType wf, float phaseValue) {
+        switch (wf) {
             case SINE:
                 return sinf(phaseValue);
 
@@ -127,15 +132,14 @@ private:
         float phaseIncrement = 2.0f * M_PI * frequency / sr;
 
         for (int i = 0; i < numberOfFrames; i++) {
-            // Generate sample
-            float sample = generateSample(phase) * amplitude;
+            float sampleA = generateSample(waveformA, phase);
+            float sampleB = generateSample(waveformB, phase);
+            float sample = (sampleA * (1.0f - blend) + sampleB * blend) * amplitude;
 
-            // Convert to 16-bit and write to stereo output
             short int intSample = (short int) (sample * 32767.0f);
-            output[i * 2] = intSample;      // Left channel
-            output[i * 2 + 1] = intSample;  // Right channel
+            output[i * 2] = intSample;
+            output[i * 2 + 1] = intSample;
 
-            // Increment phase
             phase += phaseIncrement;
             if (phase >= 2.0f * M_PI) {
                 phase -= 2.0f * M_PI;
@@ -158,10 +162,10 @@ Java_ocd_phonetricks_audio_AndroidAudioManager_nativeInit(JNIEnv *env, jobject t
 JNIEXPORT void JNICALL
 Java_ocd_phonetricks_audio_AndroidAudioManager_nativePlaySound(
         JNIEnv *env, jobject thiz, jlong synth_ptr, jfloat frequency, jfloat amplitude,
-        jint waveform_type) {
+        jint waveform_a, jint waveform_b, jfloat blend) {
     auto *synth = reinterpret_cast<SuperpoweredSynthesizer *>(synth_ptr);
     if (synth) {
-        synth->playSound(frequency, amplitude, waveform_type);
+        synth->playSound(frequency, amplitude, waveform_a, waveform_b, blend);
     }
 }
 

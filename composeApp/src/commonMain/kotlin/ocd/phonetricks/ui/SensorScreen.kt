@@ -41,12 +41,16 @@ fun MainScreen(
 
     val frequency by synthesizerViewModel.baseFrequency.collectAsState()
     val amplitude by synthesizerViewModel.amplitude.collectAsState()
-    val waveform by synthesizerViewModel.waveform.collectAsState()
+    val waveformA by synthesizerViewModel.waveformA.collectAsState()
+    val waveformB by synthesizerViewModel.waveformB.collectAsState()
+    val waveformBlend by synthesizerViewModel.waveformBlend.collectAsState()
 
     MainScreenContent(
         frequency,
         amplitude,
-        waveform,
+        waveformA,
+        waveformB,
+        waveformBlend,
         accelerometerHistory,
         gyroscopeHistory,
         quaternionHistory,
@@ -62,7 +66,9 @@ fun MainScreen(
 private fun MainScreenContent(
     frequency: Float,
     amplitude: Float,
-    waveform: Waveform,
+    waveformA: Waveform,
+    waveformB: Waveform,
+    waveformBlend: Float,
     accelerometerHistory: List<Accelerometer>,
     gyroscopeHistory: List<Gyroscope>,
     quaternionHistory: List<RotationVector>,
@@ -82,7 +88,7 @@ private fun MainScreenContent(
             )
 
             DebugInfo(
-                frequency, amplitude, waveform, accelerometerHistory, gyroscopeHistory, quaternionHistory,
+                frequency, amplitude, waveformA, waveformB, waveformBlend, accelerometerHistory, gyroscopeHistory, quaternionHistory,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
 
@@ -111,7 +117,9 @@ private fun MainScreenContent(
 private fun DebugInfo(
     frequency: Float,
     amplitude: Float,
-    waveform: Waveform,
+    waveformA: Waveform,
+    waveformB: Waveform,
+    waveformBlend: Float,
     accelerometerHistory: List<Accelerometer>,
     gyroscopeHistory: List<Gyroscope>,
     quaternionHistory: List<RotationVector>,
@@ -123,7 +131,9 @@ private fun DebugInfo(
         SynthParametersCard(
             frequency = frequency,
             amplitude = amplitude,
-            waveform = waveform,
+            waveformA = waveformA,
+            waveformB = waveformB,
+            blend = waveformBlend,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -162,7 +172,9 @@ fun MainScreenContentPreview() = MaterialTheme {
     MainScreenContent(
         frequency = 440f,
         amplitude = 0.5f,
-        waveform = Waveform.SINE,
+        waveformA = Waveform.SINE,
+        waveformB = Waveform.SQUARE,
+        waveformBlend = 0f,
         accelerometerHistory = emptyList(),
         gyroscopeHistory = emptyList(),
         quaternionHistory = emptyList(),

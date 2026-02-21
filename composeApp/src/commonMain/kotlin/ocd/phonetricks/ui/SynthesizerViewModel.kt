@@ -34,8 +34,12 @@ class SynthesizerViewModel(
     private val _amplitude = MutableStateFlow(0.5f)
     val amplitude: StateFlow<Float> = _amplitude.asStateFlow()
 
-    private val _waveform = MutableStateFlow(Waveform.SINE)
-    val waveform: StateFlow<Waveform> = _waveform.asStateFlow()
+    private val _waveformA = MutableStateFlow(Waveform.SINE)
+    private val _waveformB = MutableStateFlow(Waveform.SINE)
+    private val _waveformBlend = MutableStateFlow(0f)
+    val waveformA: StateFlow<Waveform> = _waveformA.asStateFlow()
+    val waveformB: StateFlow<Waveform> = _waveformB.asStateFlow()
+    val waveformBlend: StateFlow<Float> = _waveformBlend.asStateFlow()
 
     private val _isTouchInBox = MutableStateFlow(false)
     val isTouchInBox: StateFlow<Boolean> = _isTouchInBox.asStateFlow()
@@ -122,18 +126,29 @@ class SynthesizerViewModel(
             p.min + t * (p.max - p.min)
         }
 
-        val waveform = if (waveformMappings.isEmpty()) _waveform.value else {
+        val waveformA: Waveform
+        val waveformB: Waveform
+        val blend: Float
+        if (waveformMappings.isEmpty()) {
+            waveformA = _waveformA.value
+            waveformB = _waveformB.value
+            blend = _waveformBlend.value
+        } else {
             val p = waveformMappings.first().parameter as ControlParameter.Waveform
             val t = waveformMappings.map { normalize(it) }.average().toFloat().coerceIn(0f, 1f)
-            mapWaveform(t, p)
+            waveformA = p.startWaveform
+            waveformB = p.endWaveform
+            blend = t
         }
 
         _baseFrequency.value = frequency
         _amplitude.value = amplitude
-        _waveform.value = waveform
+        _waveformA.value = waveformA
+        _waveformB.value = waveformB
+        _waveformBlend.value = blend
 
         if (_isTouchInBox.value) {
-            audioManager.playSynthSound(frequency, amplitude, waveform)
+            audioManager.playSynthSound(frequency, amplitude, waveformA, waveformB, blend)
         }
     }
 
@@ -144,13 +159,6 @@ class SynthesizerViewModel(
         return if (inputRange == 0f) 0.5f else ((raw - p.inputMin) / inputRange).coerceIn(0f, 1f)
     }
 
-    private fun mapWaveform(t: Float, config: ControlParameter.Waveform): Waveform {
-        val startOrdinal = config.startWaveform.ordinal
-        val endOrdinal = config.endWaveform.ordinal
-        val interpolated = (startOrdinal + t * (endOrdinal - startOrdinal)).toInt()
-            .coerceIn(minOf(startOrdinal, endOrdinal), maxOf(startOrdinal, endOrdinal))
-        return Waveform.entries[interpolated]
-    }
 
     fun onTouchInBox(x: Float = 0.5f, y: Float = 0.5f) {
         _isTouchInBox.value = true

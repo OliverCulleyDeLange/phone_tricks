@@ -22,12 +22,21 @@ import kotlin.math.roundToInt
 fun SynthParametersCard(
     frequency: Float,
     amplitude: Float,
-    waveform: Waveform,
+    waveformA: Waveform,
+    waveformB: Waveform,
+    blend: Float,
     modifier: Modifier = Modifier
 ) {
+    val waveformLabel = if (waveformA == waveformB || blend <= 0f) {
+        waveformA.name
+    } else if (blend >= 1f) {
+        waveformB.name
+    } else {
+        "${waveformA.name}→${waveformB.name} ${(blend * 100).roundToInt()}%"
+    }
     Column(modifier = modifier.padding(16.dp)) {
         Text(
-            "${frequency.roundToInt()} Hz ${waveform.name} @ ${(amplitude * 100).roundToInt()}%",
+            "${frequency.roundToInt()} Hz $waveformLabel @ ${(amplitude * 100).roundToInt()}%",
             color = MaterialTheme.colorScheme.onSecondaryContainer
         )
     }

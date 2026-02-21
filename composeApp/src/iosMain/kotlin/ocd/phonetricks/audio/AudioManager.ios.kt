@@ -18,7 +18,9 @@ class IOSAudioManager : AudioManager {
     // Current sound parameters
     private var currentFrequency = 440f
     private var currentAmplitude = 0.5f
-    private var currentWaveform = Waveform.SINE
+    private var currentWaveformA = Waveform.SINE
+    private var currentWaveformB = Waveform.SINE
+    private var currentBlend = 0f
 
     // Buffer size for audio generation
     private val bufferSize = 2048
@@ -50,10 +52,18 @@ class IOSAudioManager : AudioManager {
         }
     }
 
-    override fun playSynthSound(frequency: Float, amplitude: Float, waveform: Waveform) {
+    override fun playSynthSound(
+        frequency: Float,
+        amplitude: Float,
+        waveformA: Waveform,
+        waveformB: Waveform,
+        blend: Float,
+    ) {
         currentFrequency = frequency
         currentAmplitude = amplitude
-        currentWaveform = waveform
+        currentWaveformA = waveformA
+        currentWaveformB = waveformB
+        currentBlend = blend
 
         if (!isPlaying) {
             isPlaying = true
@@ -69,6 +79,23 @@ class IOSAudioManager : AudioManager {
     override fun release() {
         stopSound()
         audioEngine.stop()
+    }
+
+    private fun generateSample(waveform: Waveform, phase: Double): Double = when (waveform) {
+        Waveform.SINE -> sin(phase)
+        Waveform.SQUARE -> if (phase < PI) 1.0 else -1.0
+        Waveform.TRIANGLE -> {
+            val n = phase / (2.0 * PI)
+            when {
+                n < 0.25 -> n * 4.0
+                n < 0.75 -> 2.0 - (n * 4.0)
+                else -> (n * 4.0) - 4.0
+            }
+        }
+        Waveform.SAWTOOTH -> {
+            val n = phase / (2.0 * PI)
+            2.0 * (n - floor(0.5 + n))
+        }
     }
 
     @OptIn(ExperimentalForeignApi::class)
@@ -98,25 +125,12 @@ class IOSAudioManager : AudioManager {
 
         // Generate the waveform
         val phaseIncrement = 2.0 * PI * currentFrequency.toDouble() / sampleRate
+        val blend = currentBlend.toDouble()
 
         for (i in 0 until bufferSize) {
-            val sample = when (currentWaveform) {
-                Waveform.SINE -> sin(phase)
-                Waveform.SQUARE -> if (phase < PI) 1.0 else -1.0
-                Waveform.TRIANGLE -> {
-                    val normalizedPhase = (phase / (2.0 * PI))
-                    when {
-                        normalizedPhase < 0.25 -> normalizedPhase * 4.0
-                        normalizedPhase < 0.75 -> 2.0 - (normalizedPhase * 4.0)
-                        else -> (normalizedPhase * 4.0) - 4.0
-                    }
-                }
-
-                Waveform.SAWTOOTH -> {
-                    val normalizedPhase = (phase / (2.0 * PI))
-                    2.0 * (normalizedPhase - floor(0.5 + normalizedPhase))
-                }
-            }
+            val sampleA = generateSample(currentWaveformA, phase)
+            val sampleB = generateSample(currentWaveformB, phase)
+            val sample = sampleA * (1.0 - blend) + sampleB * blend
 
             samples[i] = (sample * currentAmplitude).toFloat()
             phase += phaseIncrement
