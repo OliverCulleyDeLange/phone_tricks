@@ -3,6 +3,7 @@
 #include <cmath>
 #include <atomic>
 #include <mutex>
+#include <cstring>
 #include "superpowered/SuperpoweredSimple.h"
 #include "superpowered/SuperpoweredAndroidAudioIO.h"
 
@@ -10,12 +11,156 @@
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 
-// Waveform types
-enum WaveformType {
-    SINE = 0,
-    SQUARE = 1,
-    TRIANGLE = 2,
-    SAWTOOTH = 3
+enum WaveformType { SINE = 0, SQUARE = 1, TRIANGLE = 2, SAWTOOTH = 3 };
+enum EffectId { FX_ECHO = 0, FX_DELAY = 1, FX_BITCRUSHER = 2, FX_REVERB = 3, FX_WHOOSH = 4, FX_DISTORTION = 5 };
+enum FilterPresetId { F_LOWPASS = 0, F_HIGHPASS = 1, F_LOWSHELF = 2, F_HIGHSHELF = 3, F_BANDPASS = 4, F_NOTCH = 5, F_PARAMETRIC = 6 };
+
+static const int MAX_DELAY_SAMPLES = 88200;
+
+struct EchoDelay {
+    float buffer[MAX_DELAY_SAMPLES] = {};
+    int writePos = 0;
+    int delaySamples;
+    float feedback;
+    EchoDelay(int d, float f) : delaySamples(d), feedback(f) {}
+    float process(float in) {
+        int readPos = (writePos - delaySamples + MAX_DELAY_SAMPLES) % MAX_DELAY_SAMPLES;
+        float out = in + buffer[readPos] * feedback;
+        buffer[writePos] = out;
+        writePos = (writePos + 1) % MAX_DELAY_SAMPLES;
+        return out;
+    }
+};
+
+struct ReverbAllpass {
+    float buffer[4096] = {};
+    int pos = 0;
+    int size;
+    float gain;
+    ReverbAllpass(int s, float g) : size(s), gain(g) {}
+    float process(float in) {
+        float delayed = buffer[pos];
+        float out = -in + delayed;
+        buffer[pos] = in + delayed * gain;
+        pos = (pos + 1) % size;
+        return out;
+    }
+};
+
+struct SimpleComb {
+    float buffer[8192] = {};
+    int pos = 0;
+    int size;
+    float feedback;
+    float filterStore = 0;
+    float damp;
+    SimpleComb(int s, float fb, float d) : size(s), feedback(fb), damp(d) {}
+    float process(float in) {
+        float out = buffer[pos];
+        filterStore = out * (1.0f - damp) + filterStore * damp;
+        buffer[pos] = in + filterStore * feedback;
+        pos = (pos + 1) % size;
+        return out;
+    }
+};
+
+struct BiquadFilter {
+    float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
+    float x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+
+    void setLowPass(float freq, float sr, float q = 0.707f) {
+        float w0 = 2.0f * M_PI * freq / sr;
+        float cosW = cosf(w0), sinW = sinf(w0);
+        float alpha = sinW / (2.0f * q);
+        float a0 = 1.0f + alpha;
+        b0 = (1.0f - cosW) / 2.0f / a0;
+        b1 = (1.0f - cosW) / a0;
+        b2 = b0;
+        a1 = -2.0f * cosW / a0;
+        a2 = (1.0f - alpha) / a0;
+    }
+
+    void setHighPass(float freq, float sr, float q = 0.707f) {
+        float w0 = 2.0f * M_PI * freq / sr;
+        float cosW = cosf(w0), sinW = sinf(w0);
+        float alpha = sinW / (2.0f * q);
+        float a0 = 1.0f + alpha;
+        b0 = (1.0f + cosW) / 2.0f / a0;
+        b1 = -(1.0f + cosW) / a0;
+        b2 = b0;
+        a1 = -2.0f * cosW / a0;
+        a2 = (1.0f - alpha) / a0;
+    }
+
+    void setLowShelf(float freq, float sr, float gainDb = 6.0f) {
+        float A = powf(10.0f, gainDb / 40.0f);
+        float w0 = 2.0f * M_PI * freq / sr;
+        float cosW = cosf(w0), sinW = sinf(w0);
+        float alpha = sinW / 2.0f * sqrtf((A + 1.0f / A) * (1.0f / 0.9f - 1.0f) + 2.0f);
+        float a0 = (A + 1.0f) + (A - 1.0f) * cosW + 2.0f * sqrtf(A) * alpha;
+        b0 = A * ((A + 1.0f) - (A - 1.0f) * cosW + 2.0f * sqrtf(A) * alpha) / a0;
+        b1 = 2.0f * A * ((A - 1.0f) - (A + 1.0f) * cosW) / a0;
+        b2 = A * ((A + 1.0f) - (A - 1.0f) * cosW - 2.0f * sqrtf(A) * alpha) / a0;
+        a1 = -2.0f * ((A - 1.0f) + (A + 1.0f) * cosW) / a0;
+        a2 = ((A + 1.0f) + (A - 1.0f) * cosW - 2.0f * sqrtf(A) * alpha) / a0;
+    }
+
+    void setHighShelf(float freq, float sr, float gainDb = 6.0f) {
+        float A = powf(10.0f, gainDb / 40.0f);
+        float w0 = 2.0f * M_PI * freq / sr;
+        float cosW = cosf(w0), sinW = sinf(w0);
+        float alpha = sinW / 2.0f * sqrtf((A + 1.0f / A) * (1.0f / 0.9f - 1.0f) + 2.0f);
+        float a0 = (A + 1.0f) - (A - 1.0f) * cosW + 2.0f * sqrtf(A) * alpha;
+        b0 = A * ((A + 1.0f) + (A - 1.0f) * cosW + 2.0f * sqrtf(A) * alpha) / a0;
+        b1 = -2.0f * A * ((A - 1.0f) + (A + 1.0f) * cosW) / a0;
+        b2 = A * ((A + 1.0f) + (A - 1.0f) * cosW - 2.0f * sqrtf(A) * alpha) / a0;
+        a1 = 2.0f * ((A - 1.0f) - (A + 1.0f) * cosW) / a0;
+        a2 = ((A + 1.0f) - (A - 1.0f) * cosW - 2.0f * sqrtf(A) * alpha) / a0;
+    }
+
+    void setBandPass(float freq, float sr, float q = 1.0f) {
+        float w0 = 2.0f * M_PI * freq / sr;
+        float cosW = cosf(w0), sinW = sinf(w0);
+        float alpha = sinW / (2.0f * q);
+        float a0 = 1.0f + alpha;
+        b0 = alpha / a0;
+        b1 = 0.0f;
+        b2 = -alpha / a0;
+        a1 = -2.0f * cosW / a0;
+        a2 = (1.0f - alpha) / a0;
+    }
+
+    void setNotch(float freq, float sr, float q = 1.0f) {
+        float w0 = 2.0f * M_PI * freq / sr;
+        float cosW = cosf(w0), sinW = sinf(w0);
+        float alpha = sinW / (2.0f * q);
+        float a0 = 1.0f + alpha;
+        b0 = 1.0f / a0;
+        b1 = -2.0f * cosW / a0;
+        b2 = b0;
+        a1 = b1;
+        a2 = (1.0f - alpha) / a0;
+    }
+
+    void setParametric(float freq, float sr, float gainDb = 0.0f, float q = 1.0f) {
+        float A = powf(10.0f, gainDb / 40.0f);
+        float w0 = 2.0f * M_PI * freq / sr;
+        float cosW = cosf(w0), sinW = sinf(w0);
+        float alpha = sinW / (2.0f * q);
+        float a0 = 1.0f + alpha / A;
+        b0 = (1.0f + alpha * A) / a0;
+        b1 = -2.0f * cosW / a0;
+        b2 = (1.0f - alpha * A) / a0;
+        a1 = b1;
+        a2 = (1.0f - alpha / A) / a0;
+    }
+
+    float process(float in) {
+        float out = b0 * in + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+        x2 = x1; x1 = in;
+        y2 = y1; y1 = out;
+        return out;
+    }
 };
 
 class SuperpoweredSynthesizer {
@@ -28,36 +173,41 @@ public:
             waveformB(SINE),
             blend(0.0f),
             playing(false),
+            tailFramesRemaining(0),
             phase(0.0f),
-            samplerate(44100) {
-        // Create the audio I/O
+            samplerate(44100),
+            echoWetDry(0.0f),
+            delayWetDry(0.0f),
+            bitcrusherWetDry(0.0f),
+            reverbWetDry(0.0f),
+            whooshWetDry(0.0f),
+            distortionWetDry(0.0f),
+            filterPreset(F_LOWPASS),
+            filterFrequency(1000.0f),
+            filterWetDry(0.0f),
+            echoFx(22050, 0.5f),
+            delayFx(14700, 0.3f),
+            allpass1(389, 0.5f), allpass2(277, 0.5f),
+            comb1(1557, 0.84f, 0.2f), comb2(1617, 0.84f, 0.2f),
+            comb3(1491, 0.84f, 0.2f), comb4(1422, 0.84f, 0.2f),
+            whooshPhase(0.0f) {
+
         audioIO = new SuperpoweredAndroidAudioIO(
-                samplerate,      // sample rate
-                1024,            // buffer size
-                false,           // enableInput
-                true,            // enableOutput
-                audioProcessing, // callback function
-                this,            // clientdata (userData)
-                -1,              // inputStreamType (default)
-                -1               // outputStreamType (default)
+                samplerate, 1024, false, true,
+                audioProcessing, this, -1, -1
         );
-
-        // Start audio processing
-        if (audioIO) {
-            audioIO->start();
-        }
+        if (audioIO) audioIO->start();
+        biquad.setLowPass(filterFrequency, (float)samplerate);
     }
 
-    ~SuperpoweredSynthesizer() {
-        delete audioIO;
-    }
+    ~SuperpoweredSynthesizer() { delete audioIO; }
 
-    void playSound(float freq, float amp, int waveformTypeA, int waveformTypeB, float blendFactor) {
+    void playSound(float freq, float amp, int wfA, int wfB, float blendFactor) {
         std::lock_guard<std::mutex> lock(mutex);
         frequency = freq;
         amplitude = amp;
-        waveformA = static_cast<WaveformType>(waveformTypeA);
-        waveformB = static_cast<WaveformType>(waveformTypeB);
+        waveformA = static_cast<WaveformType>(wfA);
+        waveformB = static_cast<WaveformType>(wfB);
         blend = blendFactor;
         playing = true;
     }
@@ -65,98 +215,185 @@ public:
     void stopSound() {
         std::lock_guard<std::mutex> lock(mutex);
         playing = false;
+        tailFramesRemaining = samplerate * 2;
+    }
+
+    void setEffect(int effectId, float wetDry) {
+        std::lock_guard<std::mutex> lock(mutex);
+        switch (effectId) {
+            case FX_ECHO:       echoWetDry = wetDry; break;
+            case FX_DELAY:      delayWetDry = wetDry; break;
+            case FX_BITCRUSHER: bitcrusherWetDry = wetDry; break;
+            case FX_REVERB:     reverbWetDry = wetDry; break;
+            case FX_WHOOSH:     whooshWetDry = wetDry; break;
+            case FX_DISTORTION: distortionWetDry = wetDry; break;
+        }
+    }
+
+    void setFilter(int presetId, float freq, float wetDry) {
+        std::lock_guard<std::mutex> lock(mutex);
+        filterPreset = static_cast<FilterPresetId>(presetId);
+        filterFrequency = freq;
+        filterWetDry = wetDry;
+        rebuildFilter();
     }
 
 private:
     SuperpoweredAndroidAudioIO *audioIO;
-    float frequency;
-    float amplitude;
-    WaveformType waveformA;
-    WaveformType waveformB;
-    float blend;
+    float frequency, amplitude, blend;
+    WaveformType waveformA, waveformB;
     std::atomic<bool> playing;
+    int tailFramesRemaining;
     float phase;
     unsigned int samplerate;
     std::mutex mutex;
 
-    float generateSample(WaveformType wf, float phaseValue) {
-        switch (wf) {
-            case SINE:
-                return sinf(phaseValue);
+    float echoWetDry, delayWetDry, bitcrusherWetDry, reverbWetDry, whooshWetDry, distortionWetDry;
+    FilterPresetId filterPreset;
+    float filterFrequency, filterWetDry;
 
-            case SQUARE:
-                return (phaseValue < M_PI) ? 1.0f : -1.0f;
+    EchoDelay echoFx;
+    EchoDelay delayFx;
+    ReverbAllpass allpass1, allpass2;
+    SimpleComb comb1, comb2, comb3, comb4;
+    BiquadFilter biquad;
+    float whooshPhase;
 
-            case TRIANGLE: {
-                float normalizedPhase = phaseValue / (2.0f * M_PI);
-                if (normalizedPhase < 0.25f)
-                    return normalizedPhase * 4.0f;
-                else if (normalizedPhase < 0.75f)
-                    return 2.0f - (normalizedPhase * 4.0f);
-                else
-                    return (normalizedPhase * 4.0f) - 4.0f;
-            }
-
-            case SAWTOOTH: {
-                float normalizedPhase = phaseValue / (2.0f * M_PI);
-                return 2.0f * (normalizedPhase - floorf(0.5f + normalizedPhase));
-            }
-
-            default:
-                return 0.0f;
+    void rebuildFilter() {
+        float sr = (float)samplerate;
+        switch (filterPreset) {
+            case F_LOWPASS:    biquad.setLowPass(filterFrequency, sr); break;
+            case F_HIGHPASS:   biquad.setHighPass(filterFrequency, sr); break;
+            case F_LOWSHELF:   biquad.setLowShelf(filterFrequency, sr); break;
+            case F_HIGHSHELF:  biquad.setHighShelf(filterFrequency, sr); break;
+            case F_BANDPASS:   biquad.setBandPass(filterFrequency, sr); break;
+            case F_NOTCH:      biquad.setNotch(filterFrequency, sr); break;
+            case F_PARAMETRIC: biquad.setParametric(filterFrequency, sr); break;
         }
     }
 
-    // Static callback function for audio processing
-    static bool audioProcessing(
-            void *clientdata,
-            short int *audio,
-            int numberOfFrames,
-            int sr) {
-        return static_cast<SuperpoweredSynthesizer *>(clientdata)->onAudioProcess(audio,
-                                                                                  numberOfFrames,
-                                                                                  sr);
+    float generateSample(WaveformType wf, float p) {
+        switch (wf) {
+            case SINE:     return sinf(p);
+            case SQUARE:   return (p < M_PI) ? 1.0f : -1.0f;
+            case TRIANGLE: {
+                float n = p / (2.0f * M_PI);
+                if (n < 0.25f) return n * 4.0f;
+                else if (n < 0.75f) return 2.0f - n * 4.0f;
+                else return n * 4.0f - 4.0f;
+            }
+            case SAWTOOTH: {
+                float n = p / (2.0f * M_PI);
+                return 2.0f * (n - floorf(0.5f + n));
+            }
+            default: return 0.0f;
+        }
     }
 
-    // Non-static audio processing function
+    float applyBitcrusher(float sample, float amount) {
+        int bits = (int)(1.0f + (1.0f - amount) * 14.0f);
+        float levels = powf(2.0f, (float)bits);
+        return roundf(sample * levels) / levels;
+    }
+
+    float applyReverb(float in) {
+        float c1 = comb1.process(in);
+        float c2 = comb2.process(in);
+        float c3 = comb3.process(in);
+        float c4 = comb4.process(in);
+        float mixed = (c1 + c2 + c3 + c4) * 0.25f;
+        mixed = allpass1.process(mixed);
+        mixed = allpass2.process(mixed);
+        return mixed;
+    }
+
+    static bool audioProcessing(void *clientdata, short int *audio, int numberOfFrames, int sr) {
+        return static_cast<SuperpoweredSynthesizer *>(clientdata)->onAudioProcess(audio, numberOfFrames, sr);
+    }
+
     bool onAudioProcess(short int *output, int numberOfFrames, int sr) {
         std::lock_guard<std::mutex> lock(mutex);
 
-        if (!playing) {
-            // Output silence if not playing
+        const bool isTail = !playing && tailFramesRemaining > 0;
+
+        if (!playing && tailFramesRemaining <= 0) {
             memset(output, 0, numberOfFrames * sizeof(short int) * 2);
             return true;
         }
 
-        // Generate audio
-        float phaseIncrement = 2.0f * M_PI * frequency / sr;
-
-        for (int i = 0; i < numberOfFrames; i++) {
-            float sampleA = generateSample(waveformA, phase);
-            float sampleB = generateSample(waveformB, phase);
-            float sample = (sampleA * (1.0f - blend) + sampleB * blend) * amplitude;
-
-            short int intSample = (short int) (sample * 32767.0f);
-            output[i * 2] = intSample;
-            output[i * 2 + 1] = intSample;
-
-            phase += phaseIncrement;
-            if (phase >= 2.0f * M_PI) {
-                phase -= 2.0f * M_PI;
-            }
+        if (isTail) {
+            tailFramesRemaining -= numberOfFrames;
+            if (tailFramesRemaining < 0) tailFramesRemaining = 0;
         }
 
-        return true; // Continue processing
+        float phaseIncrement = 2.0f * M_PI * frequency / sr;
+        float whooshInc = 2.0f * M_PI * 2.0f / sr;
+
+        for (int i = 0; i < numberOfFrames; i++) {
+            float dry = 0.0f;
+            if (playing) {
+                float sA = generateSample(waveformA, phase);
+                float sB = generateSample(waveformB, phase);
+                dry = (sA * (1.0f - blend) + sB * blend) * amplitude;
+                phase += phaseIncrement;
+                if (phase >= 2.0f * M_PI) phase -= 2.0f * M_PI;
+            }
+
+            float sample = dry;
+
+            if (echoWetDry > 0.0f) {
+                float wet = echoFx.process(dry);
+                sample = dry * (1.0f - echoWetDry) + wet * echoWetDry;
+            }
+
+            if (delayWetDry > 0.0f) {
+                float wet = delayFx.process(sample);
+                sample = sample * (1.0f - delayWetDry) + wet * delayWetDry;
+            }
+
+            if (bitcrusherWetDry > 0.0f) {
+                float crushed = applyBitcrusher(sample, bitcrusherWetDry);
+                sample = sample * (1.0f - bitcrusherWetDry) + crushed * bitcrusherWetDry;
+            }
+
+            if (reverbWetDry > 0.0f) {
+                float wet = applyReverb(sample);
+                sample = sample * (1.0f - reverbWetDry) + wet * reverbWetDry;
+            }
+
+            if (whooshWetDry > 0.0f) {
+                float mod = 0.5f + 0.5f * sinf(whooshPhase);
+                float wet = sample * mod;
+                sample = sample * (1.0f - whooshWetDry) + wet * whooshWetDry;
+                whooshPhase += whooshInc;
+                if (whooshPhase >= 2.0f * M_PI) whooshPhase -= 2.0f * M_PI;
+            }
+
+            if (distortionWetDry > 0.0f) {
+                float drive = 1.0f + distortionWetDry * 20.0f;
+                float distorted = tanhf(sample * drive) / tanhf(drive);
+                sample = sample * (1.0f - distortionWetDry) + distorted * distortionWetDry;
+            }
+
+            if (filterWetDry > 0.0f) {
+                float filtered = biquad.process(sample);
+                sample = sample * (1.0f - filterWetDry) + filtered * filterWetDry;
+            }
+
+            short int out = (short int)(fmaxf(-1.0f, fminf(1.0f, sample)) * 32767.0f);
+            output[i * 2] = out;
+            output[i * 2 + 1] = out;
+        }
+
+        return true;
     }
 };
 
-// JNI functions
 extern "C" {
 
 JNIEXPORT jlong JNICALL
 Java_ocd_phonetricks_audio_AndroidAudioManager_nativeInit(JNIEnv *env, jobject thiz) {
-    auto *synth = new SuperpoweredSynthesizer();
-    return reinterpret_cast<jlong>(synth);
+    return reinterpret_cast<jlong>(new SuperpoweredSynthesizer());
 }
 
 JNIEXPORT void JNICALL
@@ -164,27 +401,37 @@ Java_ocd_phonetricks_audio_AndroidAudioManager_nativePlaySound(
         JNIEnv *env, jobject thiz, jlong synth_ptr, jfloat frequency, jfloat amplitude,
         jint waveform_a, jint waveform_b, jfloat blend) {
     auto *synth = reinterpret_cast<SuperpoweredSynthesizer *>(synth_ptr);
-    if (synth) {
-        synth->playSound(frequency, amplitude, waveform_a, waveform_b, blend);
-    }
+    if (synth) synth->playSound(frequency, amplitude, waveform_a, waveform_b, blend);
 }
 
 JNIEXPORT void JNICALL
-Java_ocd_phonetricks_audio_AndroidAudioManager_nativeStopSound(
-        JNIEnv *env, jobject thiz, jlong synth_ptr) {
+Java_ocd_phonetricks_audio_AndroidAudioManager_nativeStopSound(JNIEnv *env, jobject thiz, jlong synth_ptr) {
     auto *synth = reinterpret_cast<SuperpoweredSynthesizer *>(synth_ptr);
-    if (synth) {
-        synth->stopSound();
-    }
+    if (synth) synth->stopSound();
 }
 
 JNIEXPORT void JNICALL
-Java_ocd_phonetricks_audio_AndroidAudioManager_nativeRelease(
-        JNIEnv *env, jobject thiz, jlong synth_ptr) {
+Java_ocd_phonetricks_audio_AndroidAudioManager_nativeRelease(JNIEnv *env, jobject thiz, jlong synth_ptr) {
+    delete reinterpret_cast<SuperpoweredSynthesizer *>(synth_ptr);
+}
+
+JNIEXPORT void JNICALL
+Java_ocd_phonetricks_audio_AndroidAudioManager_nativeSetEffect(
+        JNIEnv *env, jobject thiz, jlong synth_ptr, jint effect_id, jfloat wet_dry) {
     auto *synth = reinterpret_cast<SuperpoweredSynthesizer *>(synth_ptr);
-    if (synth) {
-        delete synth;
-    }
+    if (synth) synth->setEffect(effect_id, wet_dry);
+}
+
+JNIEXPORT void JNICALL
+Java_ocd_phonetricks_audio_AndroidAudioManager_nativeSetFilter(
+        JNIEnv *env, jobject thiz, jlong synth_ptr, jint preset_id, jfloat frequency, jfloat wet_dry) {
+    auto *synth = reinterpret_cast<SuperpoweredSynthesizer *>(synth_ptr);
+    if (synth) synth->setFilter(preset_id, frequency, wet_dry);
 }
 
 } // extern "C"
+
+
+
+
+

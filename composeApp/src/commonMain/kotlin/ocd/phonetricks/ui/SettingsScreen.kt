@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Card
@@ -26,9 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -48,36 +45,35 @@ private val parameterTypes = listOf("Pitch", "Volume", "Waveform")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(settingsViewModel: SettingsViewModel, onBack: () -> Unit) {
+fun SettingsSheetContent(
+    settingsViewModel: SettingsViewModel,
+    modifier: Modifier = Modifier,
+) {
     val mappings by settingsViewModel.mappings.collectAsState()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Controls") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {
-                        settingsViewModel.addMapping(
-                            ControlMapping(ControlSurface.TOUCH_X, ControlParameter.Pitch())
-                        )
-                    }) {
-                        Icon(Icons.Filled.Add, contentDescription = "Add mapping")
-                    }
-                }
-            )
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text("Control Mappings", style = MaterialTheme.typography.titleMedium)
+            IconButton(onClick = {
+                settingsViewModel.addMapping(
+                    ControlMapping(ControlSurface.TOUCH_X, ControlParameter.Pitch())
+                )
+            }) {
+                Icon(Icons.Filled.Add, contentDescription = "Add mapping")
+            }
         }
-    ) { padding ->
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { Spacer(Modifier.height(4.dp)) }
             itemsIndexed(mappings) { index, mapping ->

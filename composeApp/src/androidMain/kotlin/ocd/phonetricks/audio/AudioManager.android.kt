@@ -13,6 +13,8 @@ class AndroidAudioManager : AudioManager {
     private external fun nativePlaySound(synthPtr: Long, frequency: Float, amplitude: Float, waveformA: Int, waveformB: Int, blend: Float)
     private external fun nativeStopSound(synthPtr: Long)
     private external fun nativeRelease(synthPtr: Long)
+    private external fun nativeSetEffect(synthPtr: Long, effectId: Int, wetDry: Float)
+    private external fun nativeSetFilter(synthPtr: Long, presetId: Int, frequency: Float, wetDry: Float)
 
     private var synthesizerPtr: Long = 0
     private var isPlaying = false
@@ -43,6 +45,14 @@ class AndroidAudioManager : AudioManager {
         if (!isPlaying) return
         isPlaying = false
         nativeStopSound(synthesizerPtr)
+    }
+
+    override fun setEffect(effect: AudioEffect, wetDry: Float) {
+        nativeSetEffect(synthesizerPtr, effect.ordinal, wetDry)
+    }
+
+    override fun setFilter(preset: FilterPreset, frequency: Float, wetDry: Float) {
+        nativeSetFilter(synthesizerPtr, preset.ordinal, frequency, wetDry)
     }
 
     override fun release() {

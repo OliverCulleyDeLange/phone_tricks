@@ -12,6 +12,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -33,6 +34,8 @@ fun MainScreen(
     sensorViewModel: SensorViewModel,
     synthesizerViewModel: SynthesizerViewModel,
     onOpenSettings: () -> Unit,
+    onOpenFx: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val rotationVectorData by sensorViewModel.rotationVectorData.collectAsState()
     val accelerometerHistory by sensorViewModel.accelerometerHistory.collectAsState()
@@ -59,6 +62,7 @@ fun MainScreen(
         onReleasePad = { synthesizerViewModel.onReleaseTouch() },
         onTare = { sensorViewModel.tare() },
         onOpenSettings = onOpenSettings,
+        onOpenFx = onOpenFx,
     )
 }
 
@@ -77,16 +81,11 @@ private fun MainScreenContent(
     onReleasePad: () -> Unit,
     onTare: () -> Unit,
     onOpenSettings: () -> Unit = {},
+    onOpenFx: () -> Unit = {},
 ) {
     Scaffold { paddingValues ->
 
         Box(Modifier.fillMaxSize().padding(paddingValues)) {
-            TouchPad(
-                onTouch = onTouchPad,
-                onUnTouch = onReleasePad,
-                Modifier.fillMaxSize()
-            )
-
             DebugInfo(
                 frequency, amplitude, waveformA, waveformB, waveformBlend, accelerometerHistory, gyroscopeHistory, quaternionHistory,
                 modifier = Modifier.align(Alignment.BottomCenter)
@@ -103,11 +102,22 @@ private fun MainScreenContent(
                 )
             }
 
-            IconButton(
-                onClick = onOpenSettings,
-                modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
+            TouchPad(
+                onTouch = onTouchPad,
+                onUnTouch = onReleasePad,
+                Modifier.fillMaxSize()
+            )
+
+            Column(
+                modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                IconButton(onClick = onOpenFx) {
+                    Text("FX", style = MaterialTheme.typography.labelMedium)
+                }
+                IconButton(onClick = onOpenSettings) {
+                    Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                }
             }
         }
     }

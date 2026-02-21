@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color.Companion.Transparent
 import androidx.compose.ui.input.pointer.consumeAllChanges
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
@@ -29,14 +30,10 @@ fun TouchPad(
             .padding(12.dp)
             .border(
                 width = 2.dp,
-                color = MaterialTheme.colorScheme.primary,
+                color = if (isTouching.value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
                 shape = RoundedCornerShape(12.dp)
             )
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
-            .background(
-                if (isTouching.value) MaterialTheme.colorScheme.primaryContainer
-                else MaterialTheme.colorScheme.surface
-            )
             .pointerInput(Unit) {
                 val boxSize = this.size
 

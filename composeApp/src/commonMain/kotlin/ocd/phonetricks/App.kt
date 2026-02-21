@@ -1,49 +1,91 @@
 package ocd.phonetricks
 
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import kotlinx.coroutines.CoroutineScope
+import androidx.compose.ui.graphics.Color
 import ocd.phonetricks.audio.createAudioManager
 import ocd.phonetricks.sensor.SensorManager
+import ocd.phonetricks.ui.FxScreen
+import ocd.phonetricks.ui.FxViewModel
 import ocd.phonetricks.ui.MainScreen
 import ocd.phonetricks.ui.SensorViewModel
-import ocd.phonetricks.ui.SettingsScreen
+import ocd.phonetricks.ui.SettingsSheetContent
 import ocd.phonetricks.ui.SettingsViewModel
 import ocd.phonetricks.ui.SynthesizerViewModel
 
+private val AppColorScheme = darkColorScheme(
+    primary = Color(0xFFCE93D8),
+    onPrimary = Color(0xFF4A148C),
+    primaryContainer = Color(0xFF6A1B9A),
+    onPrimaryContainer = Color(0xFFF3E5F5),
+    secondary = Color(0xFF80CBC4),
+    onSecondary = Color(0xFF00363D),
+    secondaryContainer = Color(0xFF00695C),
+    onSecondaryContainer = Color(0xFFE0F2F1),
+    tertiary = Color(0xFFB39DDB),
+    surface = Color(0xFF1C1B1F),
+    onSurface = Color(0xFFE6E1E5),
+    surfaceVariant = Color(0xFF49454F),
+    onSurfaceVariant = Color(0xFFCAC4D0),
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun App(sensorManager: SensorManager, coroutineScope: CoroutineScope) {
-    MaterialTheme {
-        val navController = rememberNavController()
+fun App(sensorManager: SensorManager) {
+    MaterialTheme(colorScheme = AppColorScheme) {
         val sensorViewModel = remember { SensorViewModel(sensorManager) }
         val audioManager = remember { createAudioManager() }
         val settingsViewModel = remember { SettingsViewModel() }
         val synthesizerViewModel = remember { SynthesizerViewModel(sensorManager, audioManager, settingsViewModel) }
+        val fxViewModel = remember { FxViewModel(audioManager) }
 
-        NavHost(
-            navController = navController,
-            startDestination = "main",
-            modifier = Modifier.fillMaxSize()
-        ) {
-            composable("main") {
-                MainScreen(
-                    sensorViewModel = sensorViewModel,
-                    synthesizerViewModel = synthesizerViewModel,
-                    onOpenSettings = { navController.navigate("settings") },
+        var showSettings by remember { mutableStateOf(false) }
+        var showFx by remember { mutableStateOf(false) }
+        val settingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val fxSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+        MainScreen(
+            sensorViewModel = sensorViewModel,
+            synthesizerViewModel = synthesizerViewModel,
+            onOpenSettings = { showSettings = true },
+            onOpenFx = { showFx = true },
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        if (showSettings) {
+            ModalBottomSheet(
+                onDismissRequest = { showSettings = false },
+                sheetState = settingsSheetState,
+            ) {
+                SettingsSheetContent(
+                    settingsViewModel = settingsViewModel,
+                    modifier = Modifier.fillMaxHeight(0.85f),
                 )
             }
-            composable("settings") {
-                SettingsScreen(
-                    settingsViewModel = settingsViewModel,
-                    onBack = { navController.popBackStack() },
+        }
+
+        if (showFx) {
+            ModalBottomSheet(
+                onDismissRequest = { showFx = false },
+                sheetState = fxSheetState,
+            ) {
+                FxScreen(
+                    fxViewModel = fxViewModel,
+                    modifier = Modifier.fillMaxHeight(0.85f),
                 )
             }
         }
     }
 }
+

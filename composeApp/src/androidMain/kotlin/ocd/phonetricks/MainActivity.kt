@@ -15,7 +15,7 @@ class MainActivity : ComponentActivity() {
         val sensorManager = createSensorManager(this)
 
         setContent {
-            App(sensorManager, lifecycleScope)
+            App(sensorManager)
         }
     }
 }
