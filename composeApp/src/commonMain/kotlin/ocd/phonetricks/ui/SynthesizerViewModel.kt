@@ -126,22 +126,16 @@ class SynthesizerViewModel(
      * @param x Normalized X position (0.0-1.0, left to right)
      * @param y Normalized Y position (0.0-1.0, top to bottom)
      */
-    fun onTouchInBox(inBox: Boolean, x: Float = 0.5f, y: Float = 0.5f) {
-        _isTouchInBox.value = inBox
+    fun onTouchInBox(x: Float = 0.5f, y: Float = 0.5f) {
+        _isTouchInBox.value = true
 
-        if (inBox) {
             _touchX.value = x
             _touchY.value = y
             updateParametersFromTouch(x, y)
-        } else {
-            // Make sure sound stops when touch ends
-            stopSound()
-            // Force stop again after a short delay to handle any edge cases
-            viewModelScope.launch {
-                kotlinx.coroutines.delay(50)
-                stopSound()
-            }
-        }
+    }
+
+    fun onReleaseTouch() {
+        stopSound()
     }
 
     override fun onCleared() {

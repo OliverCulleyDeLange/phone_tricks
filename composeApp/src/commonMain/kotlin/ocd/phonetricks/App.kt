@@ -19,23 +19,8 @@ fun App(sensorManager: SensorManager, coroutineScope: CoroutineScope) {
         val audioManager = remember { createAudioManager() }
         val synthesizerViewModel = remember { SynthesizerViewModel(sensorManager, audioManager) }
 
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Motion Synthesizer") },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                )
-            }
-        ) { paddingValues ->
-            Surface(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                color = MaterialTheme.colorScheme.background
-            ) {
+        Scaffold { paddingValues ->
+            Box(Modifier.padding(paddingValues)) {
                 MainScreen(sensorViewModel, synthesizerViewModel)
             }
         }

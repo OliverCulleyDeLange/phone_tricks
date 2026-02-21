@@ -114,7 +114,7 @@ actual fun PhoneVisualization3D(
                     Button(
                         onClick = onTareRequest,
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
+                            .align(Alignment.TopEnd)
                             .padding(16.dp)
                     ) {
                         Icon(Icons.Filled.Refresh, "Tare")
