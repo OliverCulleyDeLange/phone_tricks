@@ -32,7 +32,10 @@ class SensorViewModel(private val sensorManager: SensorManager) : ViewModel() {
     // Tare quaternion - stores the offset rotation to align the model with the device
     private val _tareQuaternion = MutableStateFlow<RotationVector?>(null)
 
+    private val _rawRotationVector = MutableStateFlow<RotationVector?>(null)
+
     val rotationVectorData: StateFlow<RotationVector?> = sensorManager.rotationVectorFlow.map {
+        _rawRotationVector.value = it
         applyTare(it, _tareQuaternion.value)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -95,7 +98,7 @@ class SensorViewModel(private val sensorManager: SensorManager) : ViewModel() {
     }
 
     fun tare() {
-        val currentData = rotationVectorHistory.value.lastOrNull()
+        val currentData = _rawRotationVector.value
         if (currentData != null) {
             _tareQuaternion.value = currentData
         }
