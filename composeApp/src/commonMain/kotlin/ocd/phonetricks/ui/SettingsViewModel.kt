@@ -33,6 +33,9 @@ class SettingsViewModel : ViewModel() {
             is ControlParameter.Pitch -> p.copy(inputMin = inMin, inputMax = inMax)
             is ControlParameter.Volume -> p.copy(inputMin = inMin, inputMax = inMax)
             is ControlParameter.Waveform -> p.copy(inputMin = inMin, inputMax = inMax)
+            is ControlParameter.EffectWetDry -> p.copy(inputMin = inMin, inputMax = inMax)
+            is ControlParameter.FilterFrequency -> p.copy(inputMin = inMin, inputMax = inMax)
+            is ControlParameter.FilterWetDry -> p.copy(inputMin = inMin, inputMax = inMax)
         }
         updateMapping(index, current.copy(surface = surface, parameter = updatedParameter))
     }
@@ -43,6 +46,9 @@ class SettingsViewModel : ViewModel() {
             is ControlParameter.Pitch -> parameter.copy(inputMin = inMin, inputMax = inMax)
             is ControlParameter.Volume -> parameter.copy(inputMin = inMin, inputMax = inMax)
             is ControlParameter.Waveform -> parameter.copy(inputMin = inMin, inputMax = inMax)
+            is ControlParameter.EffectWetDry -> parameter.copy(inputMin = inMin, inputMax = inMax)
+            is ControlParameter.FilterFrequency -> parameter.copy(inputMin = inMin, inputMax = inMax)
+            is ControlParameter.FilterWetDry -> parameter.copy(inputMin = inMin, inputMax = inMax)
         }
         updateMapping(index, _mappings.value[index].copy(parameter = adjusted))
     }

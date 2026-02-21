@@ -7,7 +7,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import ocd.phonetricks.audio.AudioEffect
 import ocd.phonetricks.audio.AudioManager
+import ocd.phonetricks.audio.FilterPreset
 import ocd.phonetricks.audio.Waveform
 import ocd.phonetricks.data.Accelerometer
 import ocd.phonetricks.data.ControlMapping
@@ -146,6 +148,44 @@ class SynthesizerViewModel(
         _waveformA.value = waveformA
         _waveformB.value = waveformB
         _waveformBlend.value = blend
+
+        mappings.filter { it.parameter is ControlParameter.EffectWetDry }
+            .groupBy { (it.parameter as ControlParameter.EffectWetDry).effect }
+            .forEach { (effect, effectMappings) ->
+                val wetDry = effectMappings.map { normalize(it) }.average().toFloat().coerceIn(0f, 1f)
+                audioManager.setEffect(effect, wetDry)
+            }
+
+        val filterFreqMappings = mappings.filter { it.parameter is ControlParameter.FilterFrequency }
+        val filterWetDryMappings = mappings.filter { it.parameter is ControlParameter.FilterWetDry }
+        val allFilterPresets: Set<FilterPreset> = (
+            filterFreqMappings.map { (it.parameter as ControlParameter.FilterFrequency).preset } +
+            filterWetDryMappings.map { (it.parameter as ControlParameter.FilterWetDry).preset }
+        ).toSet()
+
+        allFilterPresets.forEach { preset ->
+            val freqParam = filterFreqMappings
+                .firstOrNull { (it.parameter as ControlParameter.FilterFrequency).preset == preset }
+                ?.parameter as? ControlParameter.FilterFrequency
+            val wetDryParam = filterWetDryMappings
+                .firstOrNull { (it.parameter as ControlParameter.FilterWetDry).preset == preset }
+                ?.parameter as? ControlParameter.FilterWetDry
+
+            val frequency2 = if (freqParam != null) {
+                val t = filterFreqMappings
+                    .filter { (it.parameter as ControlParameter.FilterFrequency).preset == preset }
+                    .map { normalize(it) }.average().toFloat().coerceIn(0f, 1f)
+                freqParam.min + t * (freqParam.max - freqParam.min)
+            } else 1000f
+
+            val wetDry = if (wetDryParam != null) {
+                filterWetDryMappings
+                    .filter { (it.parameter as ControlParameter.FilterWetDry).preset == preset }
+                    .map { normalize(it) }.average().toFloat().coerceIn(0f, 1f)
+            } else 0f
+
+            audioManager.setFilter(preset, frequency2, wetDry)
+        }
 
         if (_isTouchInBox.value) {
             audioManager.playSynthSound(frequency, amplitude, waveformA, waveformB, blend)

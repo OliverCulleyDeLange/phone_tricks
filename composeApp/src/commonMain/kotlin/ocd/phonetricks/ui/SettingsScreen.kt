@@ -36,12 +36,36 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import ocd.phonetricks.audio.AudioEffect
+import ocd.phonetricks.audio.FilterPreset
 import ocd.phonetricks.audio.Waveform
 import ocd.phonetricks.data.ControlMapping
 import ocd.phonetricks.data.ControlParameter
 import ocd.phonetricks.data.ControlSurface
 
-private val parameterTypes = listOf("Pitch", "Volume", "Waveform")
+private data class ParameterOption(val label: String, val create: () -> ControlParameter)
+
+private val parameterOptions: List<ParameterOption> = buildList {
+    add(ParameterOption("Pitch") { ControlParameter.Pitch() })
+    add(ParameterOption("Volume") { ControlParameter.Volume() })
+    add(ParameterOption("Waveform") { ControlParameter.Waveform() })
+    AudioEffect.entries.forEach { effect ->
+        add(ParameterOption(effect.displayName()) { ControlParameter.EffectWetDry(effect) })
+    }
+    FilterPreset.entries.forEach { preset ->
+        add(ParameterOption("${preset.displayName()} Freq") { ControlParameter.FilterFrequency(preset) })
+        add(ParameterOption("${preset.displayName()} Mix") { ControlParameter.FilterWetDry(preset) })
+    }
+}
+
+private fun ControlParameter.displayLabel(): String = when (this) {
+    is ControlParameter.Pitch -> "Pitch"
+    is ControlParameter.Volume -> "Volume"
+    is ControlParameter.Waveform -> "Waveform"
+    is ControlParameter.EffectWetDry -> effect.displayName()
+    is ControlParameter.FilterFrequency -> "${preset.displayName()} Freq"
+    is ControlParameter.FilterWetDry -> "${preset.displayName()} Mix"
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,7 +131,7 @@ private fun MappingCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = mapping.parameter::class.simpleName ?: "Control",
+                    text = mapping.parameter.displayLabel(),
                     style = MaterialTheme.typography.titleSmall
                 )
                 IconButton(onClick = onRemove) {
@@ -145,6 +169,26 @@ private fun MappingCard(
                     config = p,
                     onStartChange = { onParameterChange(p.copy(startWaveform = it)) },
                     onEndChange = { onParameterChange(p.copy(endWaveform = it)) },
+                    onInputMinChange = { onParameterChange(p.copy(inputMin = it)) },
+                    onInputMaxChange = { onParameterChange(p.copy(inputMax = it)) },
+                )
+                is ControlParameter.EffectWetDry -> EffectWetDryFields(
+                    config = p,
+                    onEffectChange = { onParameterChange(p.copy(effect = it)) },
+                    onInputMinChange = { onParameterChange(p.copy(inputMin = it)) },
+                    onInputMaxChange = { onParameterChange(p.copy(inputMax = it)) },
+                )
+                is ControlParameter.FilterFrequency -> FilterFrequencyFields(
+                    config = p,
+                    onPresetChange = { onParameterChange(p.copy(preset = it)) },
+                    onOutMinChange = { onParameterChange(p.copy(min = it)) },
+                    onOutMaxChange = { onParameterChange(p.copy(max = it)) },
+                    onInputMinChange = { onParameterChange(p.copy(inputMin = it)) },
+                    onInputMaxChange = { onParameterChange(p.copy(inputMax = it)) },
+                )
+                is ControlParameter.FilterWetDry -> FilterWetDryFields(
+                    config = p,
+                    onPresetChange = { onParameterChange(p.copy(preset = it)) },
                     onInputMinChange = { onParameterChange(p.copy(inputMin = it)) },
                     onInputMaxChange = { onParameterChange(p.copy(inputMax = it)) },
                 )
@@ -196,11 +240,10 @@ private fun ParameterTypeDropdown(
     selected: ControlParameter,
     onSelected: (ControlParameter) -> Unit,
 ) {
-    val selectedName = selected::class.simpleName ?: ""
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
         OutlinedTextField(
-            value = selectedName,
+            value = selected.displayLabel(),
             onValueChange = {},
             readOnly = true,
             label = { Text("Parameter") },
@@ -208,16 +251,11 @@ private fun ParameterTypeDropdown(
             modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            parameterTypes.forEach { typeName ->
+            parameterOptions.forEach { option ->
                 DropdownMenuItem(
-                    text = { Text(typeName) },
+                    text = { Text(option.label) },
                     onClick = {
-                        val new: ControlParameter = when (typeName) {
-                            "Pitch" -> ControlParameter.Pitch()
-                            "Volume" -> ControlParameter.Volume()
-                            else -> ControlParameter.Waveform()
-                        }
-                        onSelected(new)
+                        onSelected(option.create())
                         expanded = false
                     }
                 )
@@ -276,6 +314,108 @@ private fun WaveformDropdown(
                 DropdownMenuItem(
                     text = { Text(waveform.name) },
                     onClick = { onSelected(waveform); expanded = false }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EffectWetDryFields(
+    config: ControlParameter.EffectWetDry,
+    onEffectChange: (AudioEffect) -> Unit,
+    onInputMinChange: (Float) -> Unit,
+    onInputMaxChange: (Float) -> Unit,
+) {
+    AudioEffectDropdown(selected = config.effect, onSelected = onEffectChange)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FloatField("In Min", config.inputMin, onInputMinChange, Modifier.weight(1f))
+        FloatField("In Max", config.inputMax, onInputMaxChange, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun FilterFrequencyFields(
+    config: ControlParameter.FilterFrequency,
+    onPresetChange: (FilterPreset) -> Unit,
+    onOutMinChange: (Float) -> Unit,
+    onOutMaxChange: (Float) -> Unit,
+    onInputMinChange: (Float) -> Unit,
+    onInputMaxChange: (Float) -> Unit,
+) {
+    FilterPresetDropdown(selected = config.preset, onSelected = onPresetChange)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FloatField("Hz Min", config.min, onOutMinChange, Modifier.weight(1f))
+        FloatField("Hz Max", config.max, onOutMaxChange, Modifier.weight(1f))
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FloatField("In Min", config.inputMin, onInputMinChange, Modifier.weight(1f))
+        FloatField("In Max", config.inputMax, onInputMaxChange, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun FilterWetDryFields(
+    config: ControlParameter.FilterWetDry,
+    onPresetChange: (FilterPreset) -> Unit,
+    onInputMinChange: (Float) -> Unit,
+    onInputMaxChange: (Float) -> Unit,
+) {
+    FilterPresetDropdown(selected = config.preset, onSelected = onPresetChange)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FloatField("In Min", config.inputMin, onInputMinChange, Modifier.weight(1f))
+        FloatField("In Max", config.inputMax, onInputMaxChange, Modifier.weight(1f))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AudioEffectDropdown(
+    selected: AudioEffect,
+    onSelected: (AudioEffect) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        OutlinedTextField(
+            value = selected.displayName(),
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Effect") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            AudioEffect.entries.forEach { effect ->
+                DropdownMenuItem(
+                    text = { Text(effect.displayName()) },
+                    onClick = { onSelected(effect); expanded = false },
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FilterPresetDropdown(
+    selected: FilterPreset,
+    onSelected: (FilterPreset) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        OutlinedTextField(
+            value = selected.displayName(),
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Filter Preset") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            FilterPreset.entries.forEach { preset ->
+                DropdownMenuItem(
+                    text = { Text(preset.displayName()) },
+                    onClick = { onSelected(preset); expanded = false },
                 )
             }
         }

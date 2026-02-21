@@ -1,5 +1,7 @@
 package ocd.phonetricks.data
 
+import ocd.phonetricks.audio.AudioEffect
+import ocd.phonetricks.audio.FilterPreset
 import ocd.phonetricks.audio.Waveform
 import ocd.phonetricks.audio.Waveform.SINE
 import ocd.phonetricks.audio.Waveform.SQUARE
@@ -52,6 +54,26 @@ sealed class ControlParameter {
         val startWaveform: ocd.phonetricks.audio.Waveform = SINE,
         val endWaveform: ocd.phonetricks.audio.Waveform = SQUARE,
         override val inputMin: Float = -1f,
+        override val inputMax: Float = 1f,
+    ) : ControlParameter()
+
+    data class EffectWetDry(
+        val effect: AudioEffect = AudioEffect.ECHO,
+        override val inputMin: Float = 0f,
+        override val inputMax: Float = 1f,
+    ) : ControlParameter()
+
+    data class FilterFrequency(
+        val preset: FilterPreset = FilterPreset.LOW_PASS,
+        val min: Float = 20f,
+        val max: Float = 20000f,
+        override val inputMin: Float = 0f,
+        override val inputMax: Float = 1f,
+    ) : ControlParameter()
+
+    data class FilterWetDry(
+        val preset: FilterPreset = FilterPreset.LOW_PASS,
+        override val inputMin: Float = 0f,
         override val inputMax: Float = 1f,
     ) : ControlParameter()
 }
