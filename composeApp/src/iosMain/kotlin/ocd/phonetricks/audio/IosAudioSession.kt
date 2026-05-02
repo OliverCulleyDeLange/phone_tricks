@@ -27,3 +27,16 @@ internal fun configureSharedAudioSession() {
         // start anyway — failures surface through startAndReturnError.
     }
 }
+
+/**
+ * Trigger the mic permission prompt if the user hasn't decided yet.
+ * Repeated calls are safe — iOS only shows the system alert on the
+ * first call. The callback fires immediately if the permission state
+ * is already known.
+ */
+@OptIn(ExperimentalForeignApi::class)
+internal fun requestMicrophonePermission(onResult: (Boolean) -> Unit) {
+    AVAudioSession.sharedInstance().requestRecordPermission { granted ->
+        onResult(granted)
+    }
+}

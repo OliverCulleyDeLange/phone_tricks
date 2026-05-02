@@ -76,19 +76,27 @@ class IOSSamplePlayer : SamplePlayer {
     override fun startRecording() {
         stopPlayback()
         recordedChunks.clear()
-        _isRecording.value = true
-        val inputNode = engine.inputNode
-        inputNode.installTapOnBus(
-            bus = 0u,
-            bufferSize = bufferSize.toUInt(),
-            format = inputNode.inputFormatForBus(0u),
-        ) { buffer, _ ->
-            if (!_isRecording.value) return@installTapOnBus
-            val channelData = buffer?.floatChannelData ?: return@installTapOnBus
-            val frames = buffer.frameLength.toInt()
-            val row = channelData[0] ?: return@installTapOnBus
-            val chunk = FloatArray(frames) { row[it] }
-            recordedChunks.add(chunk)
+        // Surface "not recording" until the system permission dialog
+        // resolves. Without this, denying the prompt would leave the UI
+        // armed forever.
+        _isRecording.value = false
+        requestMicrophonePermission { granted ->
+            if (!granted) return@requestMicrophonePermission
+            recordedChunks.clear()
+            _isRecording.value = true
+            val inputNode = engine.inputNode
+            inputNode.installTapOnBus(
+                bus = 0u,
+                bufferSize = bufferSize.toUInt(),
+                format = inputNode.inputFormatForBus(0u),
+            ) { buffer, _ ->
+                if (!_isRecording.value) return@installTapOnBus
+                val channelData = buffer?.floatChannelData ?: return@installTapOnBus
+                val frames = buffer.frameLength.toInt()
+                val row = channelData[0] ?: return@installTapOnBus
+                val chunk = FloatArray(frames) { row[it] }
+                recordedChunks.add(chunk)
+            }
         }
     }
 

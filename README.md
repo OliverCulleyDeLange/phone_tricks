@@ -35,8 +35,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 8. **Real-time audio thread still takes `std::mutex mutex` for parameter reads.** Heap allocation has been moved off the audio thread (commit below), but the per-callback parameter mutex is still in place. Convert the simple scalar fields (frequency, amplitude, blend, per-effect wet/dry, filterFrequency, filterWetDry) to `std::atomic<float>` so the audio callback never blocks. The eqBands vector is more involved — it needs an atomic pointer swap or a lock-free SPSC queue.
 
-10. **`iOS IOSSamplePlayer.startRecording` does not check microphone permission.** Combined with the missing Info.plist key (#3), the first recording attempt will crash on a real device.
-
 15. **iOS audio session is single-engine but used by two managers.** `IOSAudioManager` and `IOSSamplePlayer` each instantiate their own `AVAudioEngine`. Two engines on iOS contend for the same I/O hardware — at minimum the recorder's `inputNode` install will conflict with the synth's playback engine on some hardware paths.
 
 16. **iOS phone visualization is just a placeholder.** `PhoneVisualization3D.ios.kt` shows the literal text "iOS 3D Visualization (Not yet implemented)". On iOS the orientation feedback loop the user is meant to play with is invisible.
