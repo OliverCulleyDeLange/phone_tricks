@@ -53,8 +53,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 23. **`SynthesizerViewModel.onCleared` releases the AudioManager but the manager is constructed in `App.kt` via `remember`.** When the ViewModel is destroyed (e.g., process death restoration), `release()` is called, but the `remember`-scoped manager will be recreated on next composition, which on Android tries to load the native library again and may double-init OpenSL ES. Move ownership: either the ViewModel owns the manager (and is the one constructing it), or `release()` doesn't happen in `onCleared`.
 
-24. **`EqViewModel.startPolling` runs forever; no `stopPolling` is ever called.** The 50 ms spectrum poll keeps running for the lifetime of the ViewModel even when the EQ sheet is closed. Drive polling from a `LaunchedEffect` keyed on sheet visibility instead.
-
 ### Suggested improvements
 
 - **Lock-free parameter updates in `SuperpoweredSynth.cpp`.** Replace the per-callback `std::mutex` with `std::atomic<float>` for frequency, amplitude, blend, and per-effect wet/dry mixes. The audio thread should never block.
