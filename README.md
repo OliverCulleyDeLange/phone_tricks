@@ -39,8 +39,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 10. **`iOS IOSSamplePlayer.startRecording` does not check microphone permission.** Combined with the missing Info.plist key (#3), the first recording attempt will crash on a real device.
 
-11. **Permission deny for microphone is unhandled on Android.** `SamplePlayer.android.kt` constructs `AudioRecord` even if RECORD_AUDIO was denied; with `@SuppressLint("MissingPermission")` the build proceeds but the recorder enters an error state at runtime and the UI never reflects it.
-
 15. **iOS audio session is single-engine but used by two managers.** `IOSAudioManager` and `IOSSamplePlayer` each instantiate their own `AVAudioEngine`. Two engines on iOS contend for the same I/O hardware — at minimum the recorder's `inputNode` install will conflict with the synth's playback engine on some hardware paths.
 
 16. **iOS phone visualization is just a placeholder.** `PhoneVisualization3D.ios.kt` shows the literal text "iOS 3D Visualization (Not yet implemented)". On iOS the orientation feedback loop the user is meant to play with is invisible.

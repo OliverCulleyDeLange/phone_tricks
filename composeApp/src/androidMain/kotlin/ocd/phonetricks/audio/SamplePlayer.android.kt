@@ -68,10 +68,26 @@ class AndroidSamplePlayer : SamplePlayer {
             // before acquiring it again — otherwise AudioRecord
             // construction can fail with the mic still held.
             previous?.cancelAndJoin()
-            val recorder = AudioRecord(
-                MediaRecorder.AudioSource.MIC,
-                sampleRate, channelConfig, audioFormat, minBufSize * 4
-            )
+            val recorder = try {
+                AudioRecord(
+                    MediaRecorder.AudioSource.MIC,
+                    sampleRate, channelConfig, audioFormat, minBufSize * 4
+                )
+            } catch (_: SecurityException) {
+                // RECORD_AUDIO denied — surface "not recording" so the UI
+                // can flip the mic button back instead of looking stuck.
+                _isRecording.value = false
+                return@launch
+            }
+            // The MissingPermission lint is suppressed at the function level,
+            // so a denied permission won't throw on every device — instead
+            // AudioRecord stays in STATE_UNINITIALIZED and reads return
+            // ERROR_INVALID_OPERATION forever. Bail before that loop starts.
+            if (recorder.state != AudioRecord.STATE_INITIALIZED) {
+                recorder.release()
+                _isRecording.value = false
+                return@launch
+            }
             val chunks = mutableListOf<FloatArray>()
             val buf = FloatArray(minBufSize)
             recorder.startRecording()
