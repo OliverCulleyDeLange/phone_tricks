@@ -298,7 +298,9 @@ private:
 
     float fftInputBuffer[FFT_SIZE] = {};
     int fftWritePos = 0;
-    std::vector<float> spectrumData;
+    float fftReScratch[FFT_SIZE] = {};
+    float fftImScratch[FFT_SIZE] = {};
+    float spectrumPublished[SPECTRUM_BANDS] = {};
     std::mutex spectrumMutex;
 
     std::vector<EqBandState> eqBands;
@@ -321,8 +323,8 @@ public:
 
     void getSpectrum(float* out, int size) {
         std::lock_guard<std::mutex> lock(spectrumMutex);
-        int copy = std::min(size, (int)spectrumData.size());
-        for (int i = 0; i < copy; i++) out[i] = spectrumData[i];
+        int copy = std::min(size, SPECTRUM_BANDS);
+        for (int i = 0; i < copy; i++) out[i] = spectrumPublished[i];
         for (int i = copy; i < size; i++) out[i] = 0.0f;
     }
 
@@ -456,21 +458,23 @@ private:
             fftInputBuffer[fftWritePos++] = sample;
             if (fftWritePos >= FFT_SIZE) {
                 fftWritePos = 0;
-                float re[FFT_SIZE], im[FFT_SIZE] = {};
+                // Reuse member-scoped scratch buffers — std::vector<float>(SPECTRUM_BANDS)
+                // and large stack arrays (16KB) on the audio thread were the
+                // worst real-time offenders.
                 for (int j = 0; j < FFT_SIZE; j++) {
                     float hann = 0.5f * (1.0f - cosf(2.0f * M_PI * j / (FFT_SIZE - 1)));
-                    re[j] = fftInputBuffer[j] * hann;
+                    fftReScratch[j] = fftInputBuffer[j] * hann;
+                    fftImScratch[j] = 0.0f;
                 }
-                fft_inplace(re, im, FFT_SIZE);
-                std::vector<float> mag(SPECTRUM_BANDS);
-                for (int j = 0; j < SPECTRUM_BANDS; j++) {
-                    float m = sqrtf(re[j]*re[j] + im[j]*im[j]) / FFT_SIZE;
-                    mag[j] = (m > 0.0f) ? (20.0f * log10f(m) + 80.0f) / 80.0f : 0.0f;
-                    if (mag[j] < 0.0f) mag[j] = 0.0f;
-                    if (mag[j] > 1.0f) mag[j] = 1.0f;
-                }
+                fft_inplace(fftReScratch, fftImScratch, FFT_SIZE);
                 std::lock_guard<std::mutex> slock(spectrumMutex);
-                spectrumData = mag;
+                for (int j = 0; j < SPECTRUM_BANDS; j++) {
+                    float m = sqrtf(fftReScratch[j]*fftReScratch[j] + fftImScratch[j]*fftImScratch[j]) / FFT_SIZE;
+                    float v = (m > 0.0f) ? (20.0f * log10f(m) + 80.0f) / 80.0f : 0.0f;
+                    if (v < 0.0f) v = 0.0f;
+                    if (v > 1.0f) v = 1.0f;
+                    spectrumPublished[j] = v;
+                }
             }
 
             short int out = (short int)(fmaxf(-1.0f, fminf(1.0f, sample)) * 32767.0f);
@@ -539,11 +543,21 @@ Java_ocd_phonetricks_audio_AndroidAudioManager_nativeSetEqBands(
         jfloatArray frequencies, jfloatArray gains, jfloatArray qs) {
     auto *synth = reinterpret_cast<SuperpoweredSynthesizer *>(synth_ptr);
     if (!synth) return;
-    int count = env->GetArrayLength(frequencies);
+    const int freqLen = env->GetArrayLength(frequencies);
+    const int gainLen = env->GetArrayLength(gains);
+    const int qLen    = env->GetArrayLength(qs);
+    if (freqLen != gainLen || freqLen != qLen) {
+        // Mismatched arrays would cause out-of-bounds reads on the
+        // shorter of gains/qs. Refuse the update rather than crash
+        // the audio thread.
+        LOGE("nativeSetEqBands: array length mismatch (freq=%d gain=%d q=%d)",
+             freqLen, gainLen, qLen);
+        return;
+    }
     float* freqBuf = env->GetFloatArrayElements(frequencies, nullptr);
     float* gainBuf = env->GetFloatArrayElements(gains, nullptr);
     float* qBuf    = env->GetFloatArrayElements(qs, nullptr);
-    synth->setEqBands(count, freqBuf, gainBuf, qBuf);
+    synth->setEqBands(freqLen, freqBuf, gainBuf, qBuf);
     env->ReleaseFloatArrayElements(frequencies, freqBuf, JNI_ABORT);
     env->ReleaseFloatArrayElements(gains, gainBuf, JNI_ABORT);
     env->ReleaseFloatArrayElements(qs, qBuf, JNI_ABORT);

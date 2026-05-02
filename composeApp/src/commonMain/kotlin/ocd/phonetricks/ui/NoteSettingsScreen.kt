@@ -55,7 +55,7 @@ fun NoteSettingsScreen(viewModel: NoteSettingsViewModel, modifier: Modifier = Mo
                     detectDragGestures(
                         onDragStart = { dragAccum.floatValue = 0f },
                     ) { _, dragAmount ->
-                        dragAccum.floatValue += dragAmount.x - dragAmount.y
+                        dragAccum.floatValue += dragAmount.x
                         val steps = (dragAccum.floatValue / 80f).toInt()
                         if (steps != 0) {
                             viewModel.cycleScale(steps)

@@ -10,6 +10,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,20 +56,38 @@ class AndroidSamplePlayer : SamplePlayer {
     override fun getPlayPosition(): Float {
         val track = activeTrack ?: return 0f
         val head = track.playbackHeadPosition.toLong() and 0xFFFFFFFFL
-        val len = loopLenSamples.coerceAtLeast(1)
-        val posInLoop = (head - loopStartFrame).coerceAtLeast(0L)
-        return (posInLoop.toFloat() / len).coerceIn(0f, 1f)
+        return computePlayPosition(head, loopStartFrame, loopLenSamples)
     }
 
     @SuppressLint("MissingPermission")
     override fun startRecording() {
         stopPlayback()
-        recordJob?.cancel()
+        val previous = recordJob
         recordJob = scope.launch {
-            val recorder = AudioRecord(
-                MediaRecorder.AudioSource.MIC,
-                sampleRate, channelConfig, audioFormat, minBufSize * 4
-            )
+            // Wait for the previous recorder to fully release the mic
+            // before acquiring it again — otherwise AudioRecord
+            // construction can fail with the mic still held.
+            previous?.cancelAndJoin()
+            val recorder = try {
+                AudioRecord(
+                    MediaRecorder.AudioSource.MIC,
+                    sampleRate, channelConfig, audioFormat, minBufSize * 4
+                )
+            } catch (_: SecurityException) {
+                // RECORD_AUDIO denied — surface "not recording" so the UI
+                // can flip the mic button back instead of looking stuck.
+                _isRecording.value = false
+                return@launch
+            }
+            // The MissingPermission lint is suppressed at the function level,
+            // so a denied permission won't throw on every device — instead
+            // AudioRecord stays in STATE_UNINITIALIZED and reads return
+            // ERROR_INVALID_OPERATION forever. Bail before that loop starts.
+            if (recorder.state != AudioRecord.STATE_INITIALIZED) {
+                recorder.release()
+                _isRecording.value = false
+                return@launch
+            }
             val chunks = mutableListOf<FloatArray>()
             val buf = FloatArray(minBufSize)
             recorder.startRecording()
@@ -102,8 +121,9 @@ class AndroidSamplePlayer : SamplePlayer {
     }
 
     private fun startLoop() {
-        playJob?.cancel()
+        val previous = playJob
         playJob = scope.launch {
+            previous?.cancelAndJoin()
             val track = AudioTrack.Builder()
                 .setAudioAttributes(
                     AudioAttributes.Builder()
@@ -168,9 +188,11 @@ class AndroidSamplePlayer : SamplePlayer {
 
     override fun stopPlayback() {
         _isPlaying.value = false
-        playJob?.cancel()
+        val previous = playJob
         playJob = null
-        activeTrack = null
+        // Let the coroutine's finally block release the AudioTrack —
+        // clearing activeTrack here would race with track.write().
+        if (previous != null) scope.launch { previous.cancelAndJoin() }
     }
 
     override fun setLoopSpeed(speed: Float) { loopSpeed = speed.coerceIn(0.1f, 4f) }

@@ -54,6 +54,7 @@ class IOSAudioManager : AudioManager {
 
     @OptIn(ExperimentalForeignApi::class)
     private fun setupAudioEngine() {
+        configureSharedAudioSession()
         audioEngine.attachNode(playerNode)
         audioEngine.attachNode(reverbNode)
         audioEngine.attachNode(delayNode)
@@ -154,7 +155,7 @@ class IOSAudioManager : AudioManager {
 
     private fun applyBitcrusher(sample: Float, amount: Float): Float {
         val bits = (1.0f + (1.0f - amount) * 14.0f).toInt()
-        val levels = 2f.pow(bits.toFloat())
+        val levels = 2.0.pow(bits.toDouble()).toFloat()
         return kotlin.math.round(sample * levels.toDouble()).toFloat() / levels
     }
 
@@ -276,7 +277,7 @@ private class IirBiquad {
     private var y1 = 0f; private var y2 = 0f
 
     fun setPeaking(freq: Float, sr: Float, gainDb: Float, q: Float) {
-        val A = 10f.pow(gainDb / 40f)
+        val A = 10.0.pow(gainDb.toDouble() / 40.0).toFloat()
         val w0 = 2f * PI.toFloat() * freq / sr
         val alpha = sin(w0) / (2f * q)
         val a0 = 1f + alpha / A
@@ -293,8 +294,6 @@ private class IirBiquad {
         return out
     }
 }
-
-private fun Float.pow(exp: Float): Float = this.toDouble().pow(exp.toDouble()).toFloat()
 
 private fun computeSpectrum(input: FloatArray, fftSize: Int, bands: Int): FloatArray {
     val re = FloatArray(fftSize)

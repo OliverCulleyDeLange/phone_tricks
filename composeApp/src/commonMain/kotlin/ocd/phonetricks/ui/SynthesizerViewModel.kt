@@ -2,14 +2,18 @@ package ocd.phonetricks.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.sample
 import ocd.phonetricks.audio.AudioManager
 import kotlin.math.ln
 import kotlin.math.pow
+import kotlin.time.Duration.Companion.milliseconds
 import ocd.phonetricks.audio.FilterPreset
 import ocd.phonetricks.audio.Waveform
 import ocd.phonetricks.data.Accelerometer
@@ -17,6 +21,8 @@ import ocd.phonetricks.data.ControlMapping
 import ocd.phonetricks.data.ControlParameter
 import ocd.phonetricks.data.ControlSurface
 import ocd.phonetricks.data.RotationVector
+import ocd.phonetricks.data.computeVolumeAmplitude
+import ocd.phonetricks.data.normalizeSurfaceValue
 import ocd.phonetricks.sensor.SensorManager
 
 class SynthesizerViewModel(
@@ -76,6 +82,12 @@ class SynthesizerViewModel(
         ControlSurface.QUATERNION_W to _quatW,
     )
 
+    // Trigger fired when surface values change. Sampled at ~60Hz so the
+    // audio thread isn't hit by every individual sensor emission — at
+    // SENSOR_DELAY_GAME the three sensors together produce hundreds of
+    // mutex acquisitions per second otherwise.
+    private val recomputeTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
     init {
         sensorManager.rotationVectorFlow
             .onEach { r ->
@@ -84,7 +96,7 @@ class SynthesizerViewModel(
                 _quatY.value = r.y
                 _quatZ.value = r.z
                 _quatW.value = r.scalar ?: 1f
-                recompute(settingsViewModel.mappings.value)
+                recomputeTrigger.tryEmit(Unit)
             }
             .launchIn(viewModelScope)
 
@@ -94,7 +106,7 @@ class SynthesizerViewModel(
                 _accelX.value = a.x
                 _accelY.value = a.y
                 _accelZ.value = a.z
-                recompute(settingsViewModel.mappings.value)
+                recomputeTrigger.tryEmit(Unit)
             }
             .launchIn(viewModelScope)
 
@@ -103,10 +115,17 @@ class SynthesizerViewModel(
                 _gyroX.value = g.x
                 _gyroY.value = g.y
                 _gyroZ.value = g.z
-                recompute(settingsViewModel.mappings.value)
+                recomputeTrigger.tryEmit(Unit)
             }
             .launchIn(viewModelScope)
 
+        @OptIn(FlowPreview::class)
+        recomputeTrigger
+            .sample(16.milliseconds)
+            .onEach { recompute(settingsViewModel.mappings.value) }
+            .launchIn(viewModelScope)
+
+        // Mappings change is rare and user-driven — apply immediately.
         settingsViewModel.mappings
             .onEach { recompute(it) }
             .launchIn(viewModelScope)
@@ -137,11 +156,9 @@ class SynthesizerViewModel(
             (16.35 * 2.0.pow(totalSemitones / 12.0)).toFloat()
         }
 
-        val amplitude = if (volumeMappings.isEmpty()) _amplitude.value else {
-            val p = volumeMappings.first().parameter as ControlParameter.Volume
-            val t = volumeMappings.map { normalize(it) }.average().toFloat().coerceIn(0f, 1f)
-            p.min + t * (p.max - p.min)
-        }
+        val amplitude = computeVolumeAmplitude(
+            volumeMappings.map { normalize(it) to (it.parameter as ControlParameter.Volume) }
+        ) ?: _amplitude.value
 
         val waveformA: Waveform
         val waveformB: Waveform
@@ -210,8 +227,7 @@ class SynthesizerViewModel(
     private fun normalize(mapping: ControlMapping): Float {
         val raw = surfaceValues[mapping.surface]?.value ?: 0f
         val p = mapping.parameter
-        val inputRange = p.inputMax - p.inputMin
-        return if (inputRange == 0f) 0.5f else ((raw - p.inputMin) / inputRange).coerceIn(0f, 1f)
+        return normalizeSurfaceValue(raw, p.inputMin, p.inputMax)
     }
 
 
@@ -225,10 +241,5 @@ class SynthesizerViewModel(
     fun onReleaseTouch() {
         _isTouchInBox.value = false
         audioManager.stopSound()
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        audioManager.release()
     }
 }

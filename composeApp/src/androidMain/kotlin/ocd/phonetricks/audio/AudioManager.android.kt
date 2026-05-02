@@ -79,8 +79,4 @@ class AndroidAudioManager : AudioManager {
             synthesizerPtr = 0
         }
     }
-
-    protected fun finalize() {
-        if (synthesizerPtr != 0L) release()
-    }
 }
