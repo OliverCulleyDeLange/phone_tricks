@@ -56,9 +56,7 @@ class AndroidSamplePlayer : SamplePlayer {
     override fun getPlayPosition(): Float {
         val track = activeTrack ?: return 0f
         val head = track.playbackHeadPosition.toLong() and 0xFFFFFFFFL
-        val len = loopLenSamples.coerceAtLeast(1)
-        val posInLoop = (head - loopStartFrame).coerceAtLeast(0L)
-        return (posInLoop.toFloat() / len).coerceIn(0f, 1f)
+        return computePlayPosition(head, loopStartFrame, loopLenSamples)
     }
 
     @SuppressLint("MissingPermission")
