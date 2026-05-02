@@ -67,8 +67,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 24. **`EqViewModel.startPolling` runs forever; no `stopPolling` is ever called.** The 50 ms spectrum poll keeps running for the lifetime of the ViewModel even when the EQ sheet is closed. Drive polling from a `LaunchedEffect` keyed on sheet visibility instead.
 
-25. **`MainScreenContentPreview` is missing `onOpenSampler`.** `MainScreen.kt:215` constructs the preview without the parameter — it works only because of the default value. If the default is removed in future, the preview will break silently.
-
 26. **`AndroidAudioManager.finalize()` is non-deterministic.** The fallback `protected fun finalize()` (line 83) won't run reliably; Kotlin's actor model assumes explicit `release()`. Document the contract or remove finalize and rely on owners.
 
 27. **`AndroidManifest.xml` declares `Theme.Material.Light.NoActionBar` while the app uses `darkColorScheme`.** Splash and any non-Compose system UI will flash white before Compose draws.
