@@ -41,8 +41,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 4. **iOS audio session is never configured.** `IOSAudioManager.setupAudioEngine` and `IOSSamplePlayer.init` start `AVAudioEngine` without setting an `AVAudioSession` category. The synth will be silenced by the ringer switch, may not play if other audio is active, and recording will fail because the default category is playback-only.
 
-5. **`RandomForestModelTest` references a class that does not exist.** `composeApp/src/commonTest/kotlin/ocd/phonetricks/engine/RandomForestModelTest.kt` calls `RandomForestModel.loadFromJson(...)`, but `RandomForestModel` is not defined anywhere — `commonTest` will not compile. Either restore the model implementation or delete the test.
-
 6. **Duplicate `AudioManager` instance is created and leaked.** `SensorViewModel` (line 30) calls `createAudioManager()` even though it never uses the instance for anything. The ViewModel then calls `audioManager.release()` in `onCleared()`. The `SynthesizerViewModel` owns a separate, real `AudioManager`. On Android this allocates a JNI synthesizer and starts an OpenSL ES audio I/O that is never used; both AudioManagers compete for the audio output. Remove the field entirely.
 
 7. **`SynthesizerViewModel.recompute` is invoked on every sensor sample.** Each accelerometer / gyroscope / rotation-vector emission calls `recompute(...)`, which in turn calls `audioManager.playSynthSound`, `setEffect`, and `setFilter` — each of those takes the C++ audio mutex on the audio thread. At `SENSOR_DELAY_GAME` (~50 Hz × 3 sensors) this is hundreds of mutex acquisitions per second on the real-time audio thread, causing priority inversion and glitches. Throttle, or push parameters into lock-free atomics.
