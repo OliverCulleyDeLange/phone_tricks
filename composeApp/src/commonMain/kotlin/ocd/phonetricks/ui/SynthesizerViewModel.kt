@@ -225,9 +225,4 @@ class SynthesizerViewModel(
         _isTouchInBox.value = false
         audioManager.stopSound()
     }
-
-    override fun onCleared() {
-        super.onCleared()
-        audioManager.release()
-    }
 }
