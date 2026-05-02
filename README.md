@@ -65,8 +65,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 26. **`AndroidAudioManager.finalize()` is non-deterministic.** The fallback `protected fun finalize()` (line 83) won't run reliably; Kotlin's actor model assumes explicit `release()`. Document the contract or remove finalize and rely on owners.
 
-28. **JNI `nativeSetEqBands` assumes all three arrays are the same length.** It reads `count = GetArrayLength(frequencies)` and then indexes `gainBuf[i]` and `qBuf[i]` up to `count`. If the Kotlin side is ever wrong, this is an out-of-bounds read. Add a guard.
-
 29. **`FxScreen` filter-preset drag-to-cycle relies on a chord of x and y deltas** (`dragAmount.x - dragAmount.y`). This means a horizontal swipe right and a vertical swipe up both increment — confusing UX and easy to trigger by accident.
 
 ### Suggested improvements

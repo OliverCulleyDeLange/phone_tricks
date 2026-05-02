@@ -539,11 +539,21 @@ Java_ocd_phonetricks_audio_AndroidAudioManager_nativeSetEqBands(
         jfloatArray frequencies, jfloatArray gains, jfloatArray qs) {
     auto *synth = reinterpret_cast<SuperpoweredSynthesizer *>(synth_ptr);
     if (!synth) return;
-    int count = env->GetArrayLength(frequencies);
+    const int freqLen = env->GetArrayLength(frequencies);
+    const int gainLen = env->GetArrayLength(gains);
+    const int qLen    = env->GetArrayLength(qs);
+    if (freqLen != gainLen || freqLen != qLen) {
+        // Mismatched arrays would cause out-of-bounds reads on the
+        // shorter of gains/qs. Refuse the update rather than crash
+        // the audio thread.
+        LOGE("nativeSetEqBands: array length mismatch (freq=%d gain=%d q=%d)",
+             freqLen, gainLen, qLen);
+        return;
+    }
     float* freqBuf = env->GetFloatArrayElements(frequencies, nullptr);
     float* gainBuf = env->GetFloatArrayElements(gains, nullptr);
     float* qBuf    = env->GetFloatArrayElements(qs, nullptr);
-    synth->setEqBands(count, freqBuf, gainBuf, qBuf);
+    synth->setEqBands(freqLen, freqBuf, gainBuf, qBuf);
     env->ReleaseFloatArrayElements(frequencies, freqBuf, JNI_ABORT);
     env->ReleaseFloatArrayElements(gains, gainBuf, JNI_ABORT);
     env->ReleaseFloatArrayElements(qs, qBuf, JNI_ABORT);
