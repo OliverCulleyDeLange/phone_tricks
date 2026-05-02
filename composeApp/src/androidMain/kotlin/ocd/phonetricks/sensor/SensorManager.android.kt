@@ -76,30 +76,33 @@ class AndroidSensorManager(context: Context) : SensorManager {
         }
     }
 
-    override val magnetometerFlow: Flow<Magnetometer> = magnetometer.let {
-        callbackFlow {
-            val listener = object : SensorEventListener {
-                override fun onSensorChanged(event: SensorEvent?) {
-                    event?.let {
-                        trySend(
-                            Magnetometer(
-                                timestampMs = System.currentTimeMillis(),
-                                x = it.values[0],
-                                y = it.values[1],
-                                z = it.values[2]
-                            )
+    override val magnetometerFlow: Flow<Magnetometer> = callbackFlow {
+        val sensor = magnetometer
+        if (sensor == null) {
+            close()
+            return@callbackFlow
+        }
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent?) {
+                event?.let {
+                    trySend(
+                        Magnetometer(
+                            timestampMs = System.currentTimeMillis(),
+                            x = it.values[0],
+                            y = it.values[1],
+                            z = it.values[2]
                         )
-                    }
+                    )
                 }
-
-                override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
             }
 
-            androidSensorManager.registerListener(listener, it, SENSOR_DELAY)
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        }
 
-            awaitClose {
-                androidSensorManager.unregisterListener(listener)
-            }
+        androidSensorManager.registerListener(listener, sensor, SENSOR_DELAY)
+
+        awaitClose {
+            androidSensorManager.unregisterListener(listener)
         }
     }
 
@@ -132,57 +135,63 @@ class AndroidSensorManager(context: Context) : SensorManager {
         }
     }
 
-    override val linearAccelerationFlow: Flow<LinearAcceleration> = linearAcceleration.let {
-        callbackFlow {
-            val listener = object : SensorEventListener {
-                override fun onSensorChanged(event: SensorEvent?) {
-                    event?.let {
-                        trySend(
-                            LinearAcceleration(
-                                timestampMs = System.currentTimeMillis(),
-                                x = it.values[0],
-                                y = it.values[1],
-                                z = it.values[2]
-                            )
+    override val linearAccelerationFlow: Flow<LinearAcceleration> = callbackFlow {
+        val sensor = linearAcceleration
+        if (sensor == null) {
+            close()
+            return@callbackFlow
+        }
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent?) {
+                event?.let {
+                    trySend(
+                        LinearAcceleration(
+                            timestampMs = System.currentTimeMillis(),
+                            x = it.values[0],
+                            y = it.values[1],
+                            z = it.values[2]
                         )
-                    }
+                    )
                 }
-
-                override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
             }
 
-            androidSensorManager.registerListener(listener, it, SENSOR_DELAY)
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        }
 
-            awaitClose {
-                androidSensorManager.unregisterListener(listener)
-            }
+        androidSensorManager.registerListener(listener, sensor, SENSOR_DELAY)
+
+        awaitClose {
+            androidSensorManager.unregisterListener(listener)
         }
     }
 
-    override val gravityFlow: Flow<Gravity> = gravity.let {
-        callbackFlow {
-            val listener = object : SensorEventListener {
-                override fun onSensorChanged(event: SensorEvent?) {
-                    event?.let {
-                        trySend(
-                            Gravity(
-                                timestampMs = System.currentTimeMillis(),
-                                x = it.values[0],
-                                y = it.values[1],
-                                z = it.values[2]
-                            )
+    override val gravityFlow: Flow<Gravity> = callbackFlow {
+        val sensor = gravity
+        if (sensor == null) {
+            close()
+            return@callbackFlow
+        }
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent?) {
+                event?.let {
+                    trySend(
+                        Gravity(
+                            timestampMs = System.currentTimeMillis(),
+                            x = it.values[0],
+                            y = it.values[1],
+                            z = it.values[2]
                         )
-                    }
+                    )
                 }
-
-                override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
             }
 
-            androidSensorManager.registerListener(listener, it, SENSOR_DELAY)
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        }
 
-            awaitClose {
-                androidSensorManager.unregisterListener(listener)
-            }
+        androidSensorManager.registerListener(listener, sensor, SENSOR_DELAY)
+
+        awaitClose {
+            androidSensorManager.unregisterListener(listener)
         }
     }
 }
