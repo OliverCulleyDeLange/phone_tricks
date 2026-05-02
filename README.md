@@ -33,7 +33,7 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 ### Bugs — likely blocks builds or breaks features
 
-8. **Real-time audio thread takes a `std::mutex` and allocates.** `SuperpoweredSynth.cpp::onAudioProcess` holds `std::mutex mutex` for the whole callback (line 384) and allocates a `std::vector<float>` for the FFT result every FFT_SIZE samples (line 465 / 473). Both are forbidden in real-time audio code. Use `std::atomic` for parameters and a fixed-size double-buffered spectrum array.
+8. **Real-time audio thread still takes `std::mutex mutex` for parameter reads.** Heap allocation has been moved off the audio thread (commit below), but the per-callback parameter mutex is still in place. Convert the simple scalar fields (frequency, amplitude, blend, per-effect wet/dry, filterFrequency, filterWetDry) to `std::atomic<float>` so the audio callback never blocks. The eqBands vector is more involved — it needs an atomic pointer swap or a lock-free SPSC queue.
 
 9. **`MainActivity` requests RECORD_AUDIO but never handles the result.** If the user denies the prompt, the SamplePlayer silently fails when it tries to construct `AudioRecord`. If the user grants the permission after the activity has already started, nothing re-tries. Use `ActivityResultContracts.RequestPermission` and gate the sampler UI on the granted state.
 
