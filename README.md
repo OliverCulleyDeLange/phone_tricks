@@ -51,8 +51,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 12. **`AndroidSensorManager` registers `null` listeners on devices without a sensor.** `magnetometerFlow`, `linearAccelerationFlow`, and `gravityFlow` use `magnetometer.let { ... registerListener(listener, it /* nullable */, ...) }` instead of `?.let`. If the device lacks one of those sensors, `getDefaultSensor` returns `null` and the listener is registered against `null` (no-op but logs a warning) and the flow never emits. The accelerometer/gyroscope/rotation flows above use `?.let` correctly — make all six consistent.
 
-14. **iOS biquad uses `Float.pow` recursively.** `IirBiquad.setPeaking` calls `10f.pow(gainDb / 40f)` (line 279). The file-level `private fun Float.pow(exp: Float): Float = this.toDouble().pow(exp.toDouble()).toFloat()` extension is the only `pow` in scope, and it calls itself if Kotlin resolves to the extension first — verify it actually resolves to the stdlib `Double.pow` via the receiver conversion. Replace with `kotlin.math.pow` to be safe.
-
 15. **iOS audio session is single-engine but used by two managers.** `IOSAudioManager` and `IOSSamplePlayer` each instantiate their own `AVAudioEngine`. Two engines on iOS contend for the same I/O hardware — at minimum the recorder's `inputNode` install will conflict with the synth's playback engine on some hardware paths.
 
 16. **iOS phone visualization is just a placeholder.** `PhoneVisualization3D.ios.kt` shows the literal text "iOS 3D Visualization (Not yet implemented)". On iOS the orientation feedback loop the user is meant to play with is invisible.
