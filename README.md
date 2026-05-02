@@ -79,8 +79,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 29. **`FxScreen` filter-preset drag-to-cycle relies on a chord of x and y deltas** (`dragAmount.x - dragAmount.y`). This means a horizontal swipe right and a vertical swipe up both increment — confusing UX and easy to trigger by accident.
 
-30. **`fxState` `effectWetDry` map serialization round-trip.** `FxState` defaults `effectWetDry = AudioEffect.entries.associateWith { 0f }`. After a JSON round-trip with new effect entries added to the enum, the loaded state will be missing those entries — `setEffectWetDry` works because it does `toMutableMap`, but reading via `effectWetDry[effect]` returns null. Merge with defaults on load.
-
 ### Suggested improvements
 
 - **Lock-free parameter updates in `SuperpoweredSynth.cpp`.** Replace the per-callback `std::mutex` with `std::atomic<float>` for frequency, amplitude, blend, and per-effect wet/dry mixes. The audio thread should never block.
