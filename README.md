@@ -33,8 +33,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 ### Bugs — likely blocks builds or breaks features
 
-1. **iOS sensor module will not compile.** `composeApp/src/iosMain/kotlin/ocd/phonetricks/sensor/SensorManager.ios.kt` references `AccelerometerReading`, `GyroscopeReading`, `MagnetometerReading`, `RotationVectorReading`, `LinearAccelerationReading`, and `GravityReading` — none of these types exist anywhere in the codebase. The common interface declares `Flow<Accelerometer>`, etc. (no `Reading` suffix). Same file overrides `startListening()`/`stopListening()` which are not on the interface, and declares `magnetometerFlow: Flow<MagnetometerReading>? = null` (interface is non-nullable). The `Accelerometer(0f, 0f, 0f)` construction at line 30 is also missing the required `timestampMs` parameter.
-
 2. **iOS sensors collide with each other.** `CMMotionManager` only supports a single device-motion handler at a time, but each of the six iOS flows calls `startDeviceMotionUpdatesToQueue` independently and each `awaitClose` calls `stopDeviceMotionUpdates`. Collecting more than one sensor flow simultaneously (which the app does) means the latest collector wins and any cancellation kills all the others. A single shared device-motion subscription needs to fan out to per-sensor flows.
 
 3. **iOS Info.plist is missing required usage descriptions.** `iosApp/iosApp/Info.plist` does not declare `NSMicrophoneUsageDescription` (required by `AVAudioEngine.inputNode` / sample looper) or `NSMotionUsageDescription` (required by `CMMotionManager`). Both APIs will crash the app on first use.
@@ -54,8 +52,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 11. **Permission deny for microphone is unhandled on Android.** `SamplePlayer.android.kt` constructs `AudioRecord` even if RECORD_AUDIO was denied; with `@SuppressLint("MissingPermission")` the build proceeds but the recorder enters an error state at runtime and the UI never reflects it.
 
 12. **`AndroidSensorManager` registers `null` listeners on devices without a sensor.** `magnetometerFlow`, `linearAccelerationFlow`, and `gravityFlow` use `magnetometer.let { ... registerListener(listener, it /* nullable */, ...) }` instead of `?.let`. If the device lacks one of those sensors, `getDefaultSensor` returns `null` and the listener is registered against `null` (no-op but logs a warning) and the flow never emits. The accelerometer/gyroscope/rotation flows above use `?.let` correctly — make all six consistent.
-
-13. **`iOS time(null) * 1000` loses sub-second resolution.** Sensor `timestampMs` values come from `time(null) * 1000`, which is integer seconds promoted to milliseconds. All readings within a one-second window get the same timestamp, breaking the sensor history charts. `TimeUtils.ios.kt` already shows the correct pattern (`NSDate().timeIntervalSince1970 * 1000`).
 
 14. **iOS biquad uses `Float.pow` recursively.** `IirBiquad.setPeaking` calls `10f.pow(gainDb / 40f)` (line 279). The file-level `private fun Float.pow(exp: Float): Float = this.toDouble().pow(exp.toDouble()).toFloat()` extension is the only `pow` in scope, and it calls itself if Kotlin resolves to the extension first — verify it actually resolves to the stdlib `Double.pow` via the receiver conversion. Replace with `kotlin.math.pow` to be safe.
 
