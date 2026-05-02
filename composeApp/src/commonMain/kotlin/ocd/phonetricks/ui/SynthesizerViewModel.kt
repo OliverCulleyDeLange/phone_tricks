@@ -2,14 +2,18 @@ package ocd.phonetricks.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.sample
 import ocd.phonetricks.audio.AudioManager
 import kotlin.math.ln
 import kotlin.math.pow
+import kotlin.time.Duration.Companion.milliseconds
 import ocd.phonetricks.audio.FilterPreset
 import ocd.phonetricks.audio.Waveform
 import ocd.phonetricks.data.Accelerometer
@@ -78,6 +82,12 @@ class SynthesizerViewModel(
         ControlSurface.QUATERNION_W to _quatW,
     )
 
+    // Trigger fired when surface values change. Sampled at ~60Hz so the
+    // audio thread isn't hit by every individual sensor emission — at
+    // SENSOR_DELAY_GAME the three sensors together produce hundreds of
+    // mutex acquisitions per second otherwise.
+    private val recomputeTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
     init {
         sensorManager.rotationVectorFlow
             .onEach { r ->
@@ -86,7 +96,7 @@ class SynthesizerViewModel(
                 _quatY.value = r.y
                 _quatZ.value = r.z
                 _quatW.value = r.scalar ?: 1f
-                recompute(settingsViewModel.mappings.value)
+                recomputeTrigger.tryEmit(Unit)
             }
             .launchIn(viewModelScope)
 
@@ -96,7 +106,7 @@ class SynthesizerViewModel(
                 _accelX.value = a.x
                 _accelY.value = a.y
                 _accelZ.value = a.z
-                recompute(settingsViewModel.mappings.value)
+                recomputeTrigger.tryEmit(Unit)
             }
             .launchIn(viewModelScope)
 
@@ -105,10 +115,17 @@ class SynthesizerViewModel(
                 _gyroX.value = g.x
                 _gyroY.value = g.y
                 _gyroZ.value = g.z
-                recompute(settingsViewModel.mappings.value)
+                recomputeTrigger.tryEmit(Unit)
             }
             .launchIn(viewModelScope)
 
+        @OptIn(FlowPreview::class)
+        recomputeTrigger
+            .sample(16.milliseconds)
+            .onEach { recompute(settingsViewModel.mappings.value) }
+            .launchIn(viewModelScope)
+
+        // Mappings change is rare and user-driven — apply immediately.
         settingsViewModel.mappings
             .onEach { recompute(it) }
             .launchIn(viewModelScope)
