@@ -55,8 +55,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 24. **`EqViewModel.startPolling` runs forever; no `stopPolling` is ever called.** The 50 ms spectrum poll keeps running for the lifetime of the ViewModel even when the EQ sheet is closed. Drive polling from a `LaunchedEffect` keyed on sheet visibility instead.
 
-26. **`AndroidAudioManager.finalize()` is non-deterministic.** The fallback `protected fun finalize()` (line 83) won't run reliably; Kotlin's actor model assumes explicit `release()`. Document the contract or remove finalize and rely on owners.
-
 29. **`FxScreen` filter-preset drag-to-cycle relies on a chord of x and y deltas** (`dragAmount.x - dragAmount.y`). This means a horizontal swipe right and a vertical swipe up both increment — confusing UX and easy to trigger by accident.
 
 ### Suggested improvements
