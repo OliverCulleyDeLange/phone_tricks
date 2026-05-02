@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import ocd.phonetricks.audio.createAudioManager
 import ocd.phonetricks.data.Accelerometer
 import ocd.phonetricks.data.Gravity
 import ocd.phonetricks.data.Gyroscope
@@ -27,7 +26,6 @@ data class ConfidenceReading(
 )
 
 class SensorViewModel(private val sensorManager: SensorManager) : ViewModel() {
-    private val audioManager = createAudioManager()
 
     // Tare quaternion - stores the offset rotation to align the model with the device
     private val _tareQuaternion = MutableStateFlow<RotationVector?>(null)
@@ -152,8 +150,4 @@ class SensorViewModel(private val sensorManager: SensorManager) : ViewModel() {
         }
     }
 
-    override fun onCleared() {
-        super.onCleared()
-        audioManager.release()
-    }
 }
