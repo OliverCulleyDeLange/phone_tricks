@@ -67,6 +67,7 @@ class IOSSamplePlayer : SamplePlayer {
     private val recordedChunks = mutableListOf<FloatArray>()
 
     init {
+        configureSharedAudioSession()
         engine.attachNode(playerNode)
         engine.connect(playerNode, engine.mainMixerNode, format)
         try { engine.startAndReturnError(null) } catch (_: Throwable) {}

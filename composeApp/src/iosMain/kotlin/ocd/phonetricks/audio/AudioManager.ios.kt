@@ -54,6 +54,7 @@ class IOSAudioManager : AudioManager {
 
     @OptIn(ExperimentalForeignApi::class)
     private fun setupAudioEngine() {
+        configureSharedAudioSession()
         audioEngine.attachNode(playerNode)
         audioEngine.attachNode(reverbNode)
         audioEngine.attachNode(delayNode)
