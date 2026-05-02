@@ -17,6 +17,8 @@ import ocd.phonetricks.data.ControlMapping
 import ocd.phonetricks.data.ControlParameter
 import ocd.phonetricks.data.ControlSurface
 import ocd.phonetricks.data.RotationVector
+import ocd.phonetricks.data.computeVolumeAmplitude
+import ocd.phonetricks.data.normalizeSurfaceValue
 import ocd.phonetricks.sensor.SensorManager
 
 class SynthesizerViewModel(
@@ -137,11 +139,9 @@ class SynthesizerViewModel(
             (16.35 * 2.0.pow(totalSemitones / 12.0)).toFloat()
         }
 
-        val amplitude = if (volumeMappings.isEmpty()) _amplitude.value else {
-            val p = volumeMappings.first().parameter as ControlParameter.Volume
-            val t = volumeMappings.map { normalize(it) }.average().toFloat().coerceIn(0f, 1f)
-            p.min + t * (p.max - p.min)
-        }
+        val amplitude = computeVolumeAmplitude(
+            volumeMappings.map { normalize(it) to (it.parameter as ControlParameter.Volume) }
+        ) ?: _amplitude.value
 
         val waveformA: Waveform
         val waveformB: Waveform
@@ -210,8 +210,7 @@ class SynthesizerViewModel(
     private fun normalize(mapping: ControlMapping): Float {
         val raw = surfaceValues[mapping.surface]?.value ?: 0f
         val p = mapping.parameter
-        val inputRange = p.inputMax - p.inputMin
-        return if (inputRange == 0f) 0.5f else ((raw - p.inputMin) / inputRange).coerceIn(0f, 1f)
+        return normalizeSurfaceValue(raw, p.inputMin, p.inputMax)
     }
 
 

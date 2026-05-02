@@ -65,8 +65,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 21. **`AndroidSamplePlayer.startRecording` does not `join` the previous record job.** Calling `startRecording()` twice in quick succession leaves the old recorder draining in `finally` while a new one is allocated. Same pattern in `stopPlayback` for the play job.
 
-22. **`SynthesizerViewModel.recompute` averages volume but only takes range from the first mapping.** Line 140-144: when multiple `Volume` mappings exist, `t` is the average across all of them but `min`/`max` come from `volumeMappings.first()`. Either average normalized values into the first mapping's range deliberately, or document it; right now the additional mappings silently lose their range.
-
 23. **`SynthesizerViewModel.onCleared` releases the AudioManager but the manager is constructed in `App.kt` via `remember`.** When the ViewModel is destroyed (e.g., process death restoration), `release()` is called, but the `remember`-scoped manager will be recreated on next composition, which on Android tries to load the native library again and may double-init OpenSL ES. Move ownership: either the ViewModel owns the manager (and is the one constructing it), or `release()` doesn't happen in `onCleared`.
 
 24. **`EqViewModel.startPolling` runs forever; no `stopPolling` is ever called.** The 50 ms spectrum poll keeps running for the lifetime of the ViewModel even when the EQ sheet is closed. Drive polling from a `LaunchedEffect` keyed on sheet visibility instead.
