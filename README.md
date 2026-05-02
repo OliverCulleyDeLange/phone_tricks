@@ -24,3 +24,95 @@ To achieve optimal audio performance on iOS, there are plans to integrate the Su
 
 Refer to `composeApp/src/iosMain/native/README.md` for detailed instructions on the iOS native
 integration.
+
+---
+
+## Code Review (2026-05-02)
+
+The findings below are grouped by severity. Line numbers refer to the file at the time of review.
+
+### Bugs — likely blocks builds or breaks features
+
+1. **iOS sensor module will not compile.** `composeApp/src/iosMain/kotlin/ocd/phonetricks/sensor/SensorManager.ios.kt` references `AccelerometerReading`, `GyroscopeReading`, `MagnetometerReading`, `RotationVectorReading`, `LinearAccelerationReading`, and `GravityReading` — none of these types exist anywhere in the codebase. The common interface declares `Flow<Accelerometer>`, etc. (no `Reading` suffix). Same file overrides `startListening()`/`stopListening()` which are not on the interface, and declares `magnetometerFlow: Flow<MagnetometerReading>? = null` (interface is non-nullable). The `Accelerometer(0f, 0f, 0f)` construction at line 30 is also missing the required `timestampMs` parameter.
+
+2. **iOS sensors collide with each other.** `CMMotionManager` only supports a single device-motion handler at a time, but each of the six iOS flows calls `startDeviceMotionUpdatesToQueue` independently and each `awaitClose` calls `stopDeviceMotionUpdates`. Collecting more than one sensor flow simultaneously (which the app does) means the latest collector wins and any cancellation kills all the others. A single shared device-motion subscription needs to fan out to per-sensor flows.
+
+3. **iOS Info.plist is missing required usage descriptions.** `iosApp/iosApp/Info.plist` does not declare `NSMicrophoneUsageDescription` (required by `AVAudioEngine.inputNode` / sample looper) or `NSMotionUsageDescription` (required by `CMMotionManager`). Both APIs will crash the app on first use.
+
+4. **iOS audio session is never configured.** `IOSAudioManager.setupAudioEngine` and `IOSSamplePlayer.init` start `AVAudioEngine` without setting an `AVAudioSession` category. The synth will be silenced by the ringer switch, may not play if other audio is active, and recording will fail because the default category is playback-only.
+
+5. **`RandomForestModelTest` references a class that does not exist.** `composeApp/src/commonTest/kotlin/ocd/phonetricks/engine/RandomForestModelTest.kt` calls `RandomForestModel.loadFromJson(...)`, but `RandomForestModel` is not defined anywhere — `commonTest` will not compile. Either restore the model implementation or delete the test.
+
+6. **Duplicate `AudioManager` instance is created and leaked.** `SensorViewModel` (line 30) calls `createAudioManager()` even though it never uses the instance for anything. The ViewModel then calls `audioManager.release()` in `onCleared()`. The `SynthesizerViewModel` owns a separate, real `AudioManager`. On Android this allocates a JNI synthesizer and starts an OpenSL ES audio I/O that is never used; both AudioManagers compete for the audio output. Remove the field entirely.
+
+7. **`SynthesizerViewModel.recompute` is invoked on every sensor sample.** Each accelerometer / gyroscope / rotation-vector emission calls `recompute(...)`, which in turn calls `audioManager.playSynthSound`, `setEffect`, and `setFilter` — each of those takes the C++ audio mutex on the audio thread. At `SENSOR_DELAY_GAME` (~50 Hz × 3 sensors) this is hundreds of mutex acquisitions per second on the real-time audio thread, causing priority inversion and glitches. Throttle, or push parameters into lock-free atomics.
+
+8. **Real-time audio thread takes a `std::mutex` and allocates.** `SuperpoweredSynth.cpp::onAudioProcess` holds `std::mutex mutex` for the whole callback (line 384) and allocates a `std::vector<float>` for the FFT result every FFT_SIZE samples (line 465 / 473). Both are forbidden in real-time audio code. Use `std::atomic` for parameters and a fixed-size double-buffered spectrum array.
+
+9. **`MainActivity` requests RECORD_AUDIO but never handles the result.** If the user denies the prompt, the SamplePlayer silently fails when it tries to construct `AudioRecord`. If the user grants the permission after the activity has already started, nothing re-tries. Use `ActivityResultContracts.RequestPermission` and gate the sampler UI on the granted state.
+
+10. **`iOS IOSSamplePlayer.startRecording` does not check microphone permission.** Combined with the missing Info.plist key (#3), the first recording attempt will crash on a real device.
+
+11. **Permission deny for microphone is unhandled on Android.** `SamplePlayer.android.kt` constructs `AudioRecord` even if RECORD_AUDIO was denied; with `@SuppressLint("MissingPermission")` the build proceeds but the recorder enters an error state at runtime and the UI never reflects it.
+
+12. **`AndroidSensorManager` registers `null` listeners on devices without a sensor.** `magnetometerFlow`, `linearAccelerationFlow`, and `gravityFlow` use `magnetometer.let { ... registerListener(listener, it /* nullable */, ...) }` instead of `?.let`. If the device lacks one of those sensors, `getDefaultSensor` returns `null` and the listener is registered against `null` (no-op but logs a warning) and the flow never emits. The accelerometer/gyroscope/rotation flows above use `?.let` correctly — make all six consistent.
+
+13. **`iOS time(null) * 1000` loses sub-second resolution.** Sensor `timestampMs` values come from `time(null) * 1000`, which is integer seconds promoted to milliseconds. All readings within a one-second window get the same timestamp, breaking the sensor history charts. `TimeUtils.ios.kt` already shows the correct pattern (`NSDate().timeIntervalSince1970 * 1000`).
+
+14. **iOS biquad uses `Float.pow` recursively.** `IirBiquad.setPeaking` calls `10f.pow(gainDb / 40f)` (line 279). The file-level `private fun Float.pow(exp: Float): Float = this.toDouble().pow(exp.toDouble()).toFloat()` extension is the only `pow` in scope, and it calls itself if Kotlin resolves to the extension first — verify it actually resolves to the stdlib `Double.pow` via the receiver conversion. Replace with `kotlin.math.pow` to be safe.
+
+15. **iOS audio session is single-engine but used by two managers.** `IOSAudioManager` and `IOSSamplePlayer` each instantiate their own `AVAudioEngine`. Two engines on iOS contend for the same I/O hardware — at minimum the recorder's `inputNode` install will conflict with the synth's playback engine on some hardware paths.
+
+16. **iOS phone visualization is just a placeholder.** `PhoneVisualization3D.ios.kt` shows the literal text "iOS 3D Visualization (Not yet implemented)". On iOS the orientation feedback loop the user is meant to play with is invisible.
+
+17. **`createSensorManager()` (no-arg) on Android always throws.** `SensorManager.android.kt` defines `actual fun createSensorManager(): SensorManager = throw IllegalStateException(...)` — this satisfies the `expect`, but means any future common code that calls the no-arg `createSensorManager()` (the only signature on the `expect` declaration) crashes at runtime on Android. The platform-specific `createSensorManager(context)` overload is not part of the contract. Move the context dependency to a constructor parameter passed from `MainActivity`, or expose a separate Android-only entry point that `App.kt` doesn't reach.
+
+### Smaller bugs / correctness issues
+
+18. **`SensorViewModel.rotationVectorData` mutates state inside `map`.** Line 37: `sensorManager.rotationVectorFlow.map { _rawRotationVector.value = it; applyTare(...) }` — side-effecting `map` is bad style and there are *two* parallel collectors of `rotationVectorFlow` (one here via `stateIn`, one in the launch block at line 73), so each emission triggers two CMMotionManager wakeups on iOS (compounding bug #2) and double-applies tare bookkeeping.
+
+19. **Sensor history collectors always copy the whole list.** `updateHistory` (line 92) does `history + newReading` then `takeLast(historySize)`. At 50 Hz × 3 sensors × 100-element history this allocates ~15k lists/sec. Use an `ArrayDeque` or a ring buffer.
+
+20. **`SamplePlayer.getPlayPosition()` (Android) breaks on int wrap.** `playbackHeadPosition` is an `Int` that wraps approximately every 13.5 hours at 44.1 kHz. The `head - loopStartFrame` subtraction is guarded with `coerceAtLeast(0L)`, which silently freezes the marker rather than handling the wrap.
+
+21. **`AndroidSamplePlayer.startRecording` does not `join` the previous record job.** Calling `startRecording()` twice in quick succession leaves the old recorder draining in `finally` while a new one is allocated. Same pattern in `stopPlayback` for the play job.
+
+22. **`SynthesizerViewModel.recompute` averages volume but only takes range from the first mapping.** Line 140-144: when multiple `Volume` mappings exist, `t` is the average across all of them but `min`/`max` come from `volumeMappings.first()`. Either average normalized values into the first mapping's range deliberately, or document it; right now the additional mappings silently lose their range.
+
+23. **`SynthesizerViewModel.onCleared` releases the AudioManager but the manager is constructed in `App.kt` via `remember`.** When the ViewModel is destroyed (e.g., process death restoration), `release()` is called, but the `remember`-scoped manager will be recreated on next composition, which on Android tries to load the native library again and may double-init OpenSL ES. Move ownership: either the ViewModel owns the manager (and is the one constructing it), or `release()` doesn't happen in `onCleared`.
+
+24. **`EqViewModel.startPolling` runs forever; no `stopPolling` is ever called.** The 50 ms spectrum poll keeps running for the lifetime of the ViewModel even when the EQ sheet is closed. Drive polling from a `LaunchedEffect` keyed on sheet visibility instead.
+
+25. **`MainScreenContentPreview` is missing `onOpenSampler`.** `MainScreen.kt:215` constructs the preview without the parameter — it works only because of the default value. If the default is removed in future, the preview will break silently.
+
+26. **`AndroidAudioManager.finalize()` is non-deterministic.** The fallback `protected fun finalize()` (line 83) won't run reliably; Kotlin's actor model assumes explicit `release()`. Document the contract or remove finalize and rely on owners.
+
+27. **`AndroidManifest.xml` declares `Theme.Material.Light.NoActionBar` while the app uses `darkColorScheme`.** Splash and any non-Compose system UI will flash white before Compose draws.
+
+28. **JNI `nativeSetEqBands` assumes all three arrays are the same length.** It reads `count = GetArrayLength(frequencies)` and then indexes `gainBuf[i]` and `qBuf[i]` up to `count`. If the Kotlin side is ever wrong, this is an out-of-bounds read. Add a guard.
+
+29. **`FxScreen` filter-preset drag-to-cycle relies on a chord of x and y deltas** (`dragAmount.x - dragAmount.y`). This means a horizontal swipe right and a vertical swipe up both increment — confusing UX and easy to trigger by accident.
+
+30. **`fxState` `effectWetDry` map serialization round-trip.** `FxState` defaults `effectWetDry = AudioEffect.entries.associateWith { 0f }`. After a JSON round-trip with new effect entries added to the enum, the loaded state will be missing those entries — `setEffectWetDry` works because it does `toMutableMap`, but reading via `effectWetDry[effect]` returns null. Merge with defaults on load.
+
+### Suggested improvements
+
+- **Lock-free parameter updates in `SuperpoweredSynth.cpp`.** Replace the per-callback `std::mutex` with `std::atomic<float>` for frequency, amplitude, blend, and per-effect wet/dry mixes. The audio thread should never block.
+- **Pre-allocate the FFT scratch and spectrum buffers.** `float re[FFT_SIZE]` and `std::vector<float> mag` are created on the audio thread on every FFT — promote them to fields and use a lock-free SPSC pattern (or atomic pointer swap into a double-buffered array) for the UI side.
+- **Throttle parameter updates from `SynthesizerViewModel.recompute` to ~60 Hz.** Use `Flow.sample(16.milliseconds)` on the merged sensor flow rather than firing on every individual emission of three sensors.
+- **Share sensor flows.** Use `shareIn(scope, SharingStarted.WhileSubscribed(), replay = 1)` so multiple collectors don't each register their own `SensorEventListener` (Android) or fight over `CMMotionManager` (iOS).
+- **Move sensor mapping/normalization out of the ViewModel.** A pure `data class ControlMapper(val mappings: List<ControlMapping>)` with a `compute(surfaceValues: Map<...>): SynthParams` makes the logic testable; right now `SynthesizerViewModel` is too big to unit-test.
+- **Replace `System.currentTimeMillis()` calls in `EqScreen.kt` gesture detection** with `kotlin.time.TimeSource.Monotonic` (already used in `Dial.kt`). Wall-clock time can jump backward and double-tap detection will misbehave.
+- **Use `androidx.compose.foundation.gestures.detectTapGestures` and `detectDragGestures`** in `EqScreen.kt` and `SampleLooperScreen.kt` instead of hand-rolled `awaitPointerEvent` loops — less code, fewer edge cases (multitouch, cancellation).
+- **EQ band id allocation.** `nextId = (_bands.value.maxOfOrNull { it.id } ?: 0) + 1` collides if the user removes and re-adds bands across app restarts because saved `id`s come back. Use a UUID-string id or persist `nextId` alongside the bands.
+- **Persist FX `wetDry` map by enum name, not ordinal.** Reordering `AudioEffect` entries silently mis-maps stored settings.
+- **Persist `loopSpeed`, `startPoint`, `endPoint`** in `SamplePlayer` — they reset every launch.
+- **The on-screen debug panel** (`MainScreen.DebugInfo`) renders three sensor charts and the spectrum on top of the touch pad. It looks like development scaffolding; gate it behind a setting or remove it.
+- **iOS sensor timestamps** should use `mach_absolute_time` or the `CMDeviceMotion.timestamp` field (the OS-provided high-resolution timestamp), not `time(null)` or wall-clock time.
+- **`SuperpoweredSynth.cpp` ignores the actual sample rate** chosen by the audio device. The constructor passes 44100 to `SuperpoweredAndroidAudioIO` and uses the same value to build filters, but the callback receives an `int sr` parameter that may differ. Re-build filters when `sr` first arrives or assert equality.
+- **iOS `IOSAudioManager.generateAndPlaySound` recursion** can build up arbitrarily deep call stacks because the completion callback re-enters the function. Schedule onto a coroutine instead of recursing.
+- **`SUPERPOWERED_INTEGRATION.md` claims integration is complete**, but `SuperpoweredSynth.cpp` doesn't call any Superpowered API beyond `SuperpoweredAndroidAudioIO` for I/O — all DSP (filters, reverb, FFT, distortion) is hand-rolled. Either delete the doc or actually use the SDK's primitives.
+- **Remove unused magnetometer / linear-acceleration / gravity flows** from `SensorViewModel` if the UI doesn't render them. They allocate per-event `List` copies and add load to the sensor subsystem.
+- **Add a CI workflow** that builds both Android and iOS targets — the iOS sensor module bug (#1) and the missing test class (#5) would be caught immediately.
+- **Add basic unit tests for `MusicalScale.snapFrequency`, `ControlMapping` normalize/range math, and `SettingsRepository` round-trips** — these are pure, testable, and likely to drift.
+- **Consider replacing the hand-rolled FFT** with `kissfft` (Android) / `vDSP` (iOS, already imported via `platform.Accelerate.*`). The current radix-2 implementation works but is a hot loop on the audio thread.
