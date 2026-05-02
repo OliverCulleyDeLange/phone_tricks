@@ -35,8 +35,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 2. **iOS sensors collide with each other.** `CMMotionManager` only supports a single device-motion handler at a time, but each of the six iOS flows calls `startDeviceMotionUpdatesToQueue` independently and each `awaitClose` calls `stopDeviceMotionUpdates`. Collecting more than one sensor flow simultaneously (which the app does) means the latest collector wins and any cancellation kills all the others. A single shared device-motion subscription needs to fan out to per-sensor flows.
 
-3. **iOS Info.plist is missing required usage descriptions.** `iosApp/iosApp/Info.plist` does not declare `NSMicrophoneUsageDescription` (required by `AVAudioEngine.inputNode` / sample looper) or `NSMotionUsageDescription` (required by `CMMotionManager`). Both APIs will crash the app on first use.
-
 4. **iOS audio session is never configured.** `IOSAudioManager.setupAudioEngine` and `IOSSamplePlayer.init` start `AVAudioEngine` without setting an `AVAudioSession` category. The synth will be silenced by the ringer switch, may not play if other audio is active, and recording will fail because the default category is playback-only.
 
 7. **`SynthesizerViewModel.recompute` is invoked on every sensor sample.** Each accelerometer / gyroscope / rotation-vector emission calls `recompute(...)`, which in turn calls `audioManager.playSynthSound`, `setEffect`, and `setFilter` — each of those takes the C++ audio mutex on the audio thread. At `SENSOR_DELAY_GAME` (~50 Hz × 3 sensors) this is hundreds of mutex acquisitions per second on the real-time audio thread, causing priority inversion and glitches. Throttle, or push parameters into lock-free atomics.
