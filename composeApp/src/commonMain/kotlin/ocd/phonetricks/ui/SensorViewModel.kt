@@ -13,6 +13,7 @@ import ocd.phonetricks.data.LinearAcceleration
 import ocd.phonetricks.data.Magnetometer
 import ocd.phonetricks.data.RotationVector
 import ocd.phonetricks.sensor.SensorManager
+import ocd.phonetricks.sensor.appendBounded
 import ocd.phonetricks.sensor.applyTare
 
 data class ConfidenceReading(
@@ -44,19 +45,19 @@ class SensorViewModel(private val sensorManager: SensorManager) : ViewModel() {
     init {
         viewModelScope.launch {
             sensorManager.accelerometerFlow.collect { reading ->
-                accelerometerHistory.value = updateHistory(accelerometerHistory.value, reading)
+                accelerometerHistory.value = appendBounded(accelerometerHistory.value, reading, historySize)
             }
         }
 
         viewModelScope.launch {
             sensorManager.gyroscopeFlow.collect { reading ->
-                gyroscopeHistory.value = updateHistory(gyroscopeHistory.value, reading)
+                gyroscopeHistory.value = appendBounded(gyroscopeHistory.value, reading, historySize)
             }
         }
 
         viewModelScope.launch {
             sensorManager.magnetometerFlow.collect { reading ->
-                magnetometerHistory.value = updateHistory(magnetometerHistory.value, reading)
+                magnetometerHistory.value = appendBounded(magnetometerHistory.value, reading, historySize)
             }
         }
 
@@ -68,29 +69,20 @@ class SensorViewModel(private val sensorManager: SensorManager) : ViewModel() {
                 _rawRotationVector.value = reading
                 val tared = applyTare(reading, _tareQuaternion.value)
                 _rotationVectorData.value = tared
-                rotationVectorHistory.value = updateHistory(rotationVectorHistory.value, tared)
+                rotationVectorHistory.value = appendBounded(rotationVectorHistory.value, tared, historySize)
             }
         }
 
         viewModelScope.launch {
             sensorManager.linearAccelerationFlow.collect { reading ->
-                linearAccelerationHistory.value = updateHistory(linearAccelerationHistory.value, reading)
+                linearAccelerationHistory.value = appendBounded(linearAccelerationHistory.value, reading, historySize)
             }
         }
 
         viewModelScope.launch {
             sensorManager.gravityFlow.collect { reading ->
-                gravityHistory.value = updateHistory(gravityHistory.value, reading)
+                gravityHistory.value = appendBounded(gravityHistory.value, reading, historySize)
             }
-        }
-    }
-
-    private fun <T> updateHistory(history: List<T>, newReading: T): List<T> {
-        val newHistory = history + newReading
-        return if (newHistory.size > historySize) {
-            newHistory.takeLast(historySize)
-        } else {
-            newHistory
         }
     }
 

@@ -61,8 +61,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 ### Smaller bugs / correctness issues
 
-19. **Sensor history collectors always copy the whole list.** `updateHistory` (line 92) does `history + newReading` then `takeLast(historySize)`. At 50 Hz × 3 sensors × 100-element history this allocates ~15k lists/sec. Use an `ArrayDeque` or a ring buffer.
-
 20. **`SamplePlayer.getPlayPosition()` (Android) breaks on int wrap.** `playbackHeadPosition` is an `Int` that wraps approximately every 13.5 hours at 44.1 kHz. The `head - loopStartFrame` subtraction is guarded with `coerceAtLeast(0L)`, which silently freezes the marker rather than handling the wrap.
 
 21. **`AndroidSamplePlayer.startRecording` does not `join` the previous record job.** Calling `startRecording()` twice in quick succession leaves the old recorder draining in `finally` while a new one is allocated. Same pattern in `stopPlayback` for the play job.
