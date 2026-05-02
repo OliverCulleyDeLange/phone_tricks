@@ -1,5 +1,6 @@
 package ocd.phonetricks.audio
 
+import kotlin.concurrent.Volatile
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.get
 import kotlinx.cinterop.set
