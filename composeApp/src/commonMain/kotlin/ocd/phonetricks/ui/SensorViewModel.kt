@@ -3,11 +3,8 @@ package ocd.phonetricks.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ocd.phonetricks.data.Accelerometer
 import ocd.phonetricks.data.Gravity
@@ -16,8 +13,7 @@ import ocd.phonetricks.data.LinearAcceleration
 import ocd.phonetricks.data.Magnetometer
 import ocd.phonetricks.data.RotationVector
 import ocd.phonetricks.sensor.SensorManager
-import ocd.phonetricks.utils.currentTimeMillis
-import kotlin.math.sqrt
+import ocd.phonetricks.sensor.applyTare
 
 data class ConfidenceReading(
     val timestampMs: Long,
@@ -32,10 +28,8 @@ class SensorViewModel(private val sensorManager: SensorManager) : ViewModel() {
 
     private val _rawRotationVector = MutableStateFlow<RotationVector?>(null)
 
-    val rotationVectorData: StateFlow<RotationVector?> = sensorManager.rotationVectorFlow.map {
-        _rawRotationVector.value = it
-        applyTare(it, _tareQuaternion.value)
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    private val _rotationVectorData = MutableStateFlow<RotationVector?>(null)
+    val rotationVectorData: StateFlow<RotationVector?> = _rotationVectorData.asStateFlow()
 
     val accelerometerHistory = MutableStateFlow<List<Accelerometer>>(emptyList())
     val gyroscopeHistory = MutableStateFlow<List<Gyroscope>>(emptyList())
@@ -48,7 +42,6 @@ class SensorViewModel(private val sensorManager: SensorManager) : ViewModel() {
     private val historySize = 100
 
     init {
-        // Subscribe to sensor data
         viewModelScope.launch {
             sensorManager.accelerometerFlow.collect { reading ->
                 accelerometerHistory.value = updateHistory(accelerometerHistory.value, reading)
@@ -67,10 +60,15 @@ class SensorViewModel(private val sensorManager: SensorManager) : ViewModel() {
             }
         }
 
+        // Single subscription to the rotation flow: feed both the raw stream
+        // (used as the tare reference) and the post-tare stream consumed by
+        // the UI.
         viewModelScope.launch {
             sensorManager.rotationVectorFlow.collect { reading ->
-                val taredReading = applyTare(reading, _tareQuaternion.value)
-                rotationVectorHistory.value = updateHistory(rotationVectorHistory.value, taredReading)
+                _rawRotationVector.value = reading
+                val tared = applyTare(reading, _tareQuaternion.value)
+                _rotationVectorData.value = tared
+                rotationVectorHistory.value = updateHistory(rotationVectorHistory.value, tared)
             }
         }
 
@@ -102,52 +100,4 @@ class SensorViewModel(private val sensorManager: SensorManager) : ViewModel() {
             _tareQuaternion.value = currentData
         }
     }
-
-    /**
-     * Apply tare quaternion to sensor data's rotation vector
-     */
-    private fun applyTare(reading: RotationVector, tareQuat: RotationVector?): RotationVector {
-        if (tareQuat == null) return reading
-
-        val x = reading.x
-        val y = reading.y
-        val z = reading.z
-        val w = reading.scalar ?: computeScalar(x.toDouble(), y.toDouble(), z.toDouble())
-
-        val tareX = tareQuat.x
-        val tareY = tareQuat.y
-        val tareZ = tareQuat.z
-        val tareW = tareQuat.scalar ?: computeScalar(tareX.toDouble(), tareY.toDouble(), tareZ.toDouble())
-
-        val tareInvX = -tareX
-        val tareInvY = -tareY
-        val tareInvZ = -tareZ
-        val tareInvW = tareW
-
-        val resultW = tareInvW * w - tareInvX * x - tareInvY * y - tareInvZ * z
-        val resultX = tareInvW * x + tareInvX * w + tareInvY * z - tareInvZ * y
-        val resultY = tareInvW * y - tareInvX * z + tareInvY * w + tareInvZ * x
-        val resultZ = tareInvW * z + tareInvX * y - tareInvY * x + tareInvZ * w
-
-        return RotationVector(
-            timestampMs = reading.timestampMs,
-            x = resultX,
-            y = resultY,
-            z = resultZ,
-            scalar = resultW
-        )
-    }
-
-    /**
-     * Compute the scalar (w) component if not provided
-     */
-    private fun computeScalar(x: Double, y: Double, z: Double): Float {
-        val sumSquares = x * x + y * y + z * z
-        return if (sumSquares < 1.0) {
-            sqrt(1.0 - sumSquares).toFloat()
-        } else {
-            0f
-        }
-    }
-
 }

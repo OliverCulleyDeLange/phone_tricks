@@ -61,8 +61,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 ### Smaller bugs / correctness issues
 
-18. **`SensorViewModel.rotationVectorData` mutates state inside `map`.** Line 37: `sensorManager.rotationVectorFlow.map { _rawRotationVector.value = it; applyTare(...) }` — side-effecting `map` is bad style and there are *two* parallel collectors of `rotationVectorFlow` (one here via `stateIn`, one in the launch block at line 73), so each emission triggers two CMMotionManager wakeups on iOS (compounding bug #2) and double-applies tare bookkeeping.
-
 19. **Sensor history collectors always copy the whole list.** `updateHistory` (line 92) does `history + newReading` then `takeLast(historySize)`. At 50 Hz × 3 sensors × 100-element history this allocates ~15k lists/sec. Use an `ArrayDeque` or a ring buffer.
 
 20. **`SamplePlayer.getPlayPosition()` (Android) breaks on int wrap.** `playbackHeadPosition` is an `Int` that wraps approximately every 13.5 hours at 44.1 kHz. The `head - loopStartFrame` subtraction is guarded with `coerceAtLeast(0L)`, which silently freezes the marker rather than handling the wrap.
