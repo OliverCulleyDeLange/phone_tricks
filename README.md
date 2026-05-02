@@ -51,8 +51,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 16. **iOS phone visualization is just a placeholder.** `PhoneVisualization3D.ios.kt` shows the literal text "iOS 3D Visualization (Not yet implemented)". On iOS the orientation feedback loop the user is meant to play with is invisible.
 
-17. **`createSensorManager()` (no-arg) on Android always throws.** `SensorManager.android.kt` defines `actual fun createSensorManager(): SensorManager = throw IllegalStateException(...)` — this satisfies the `expect`, but means any future common code that calls the no-arg `createSensorManager()` (the only signature on the `expect` declaration) crashes at runtime on Android. The platform-specific `createSensorManager(context)` overload is not part of the contract. Move the context dependency to a constructor parameter passed from `MainActivity`, or expose a separate Android-only entry point that `App.kt` doesn't reach.
-
 ### Smaller bugs / correctness issues
 
 20. **`SamplePlayer.getPlayPosition()` (Android) breaks on int wrap.** `playbackHeadPosition` is an `Int` that wraps approximately every 13.5 hours at 44.1 kHz. The `head - loopStartFrame` subtraction is guarded with `coerceAtLeast(0L)`, which silently freezes the marker rather than handling the wrap.

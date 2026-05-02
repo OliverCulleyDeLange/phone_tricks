@@ -152,4 +152,4 @@ class IOSSensorManager : SensorManager {
     }
 }
 
-actual fun createSensorManager(): SensorManager = IOSSensorManager()
+actual fun createSensorManager(context: Any?): SensorManager = IOSSensorManager()

@@ -196,10 +196,7 @@ class AndroidSensorManager(context: Context) : SensorManager {
     }
 }
 
-actual fun createSensorManager(): SensorManager {
-    throw IllegalStateException("Context required for Android. Use createSensorManager(context) instead")
-}
-
-fun createSensorManager(context: Context): SensorManager {
-    return AndroidSensorManager(context)
+actual fun createSensorManager(context: Any?): SensorManager {
+    requireNotNull(context) { "createSensorManager requires an Android Context" }
+    return AndroidSensorManager(context as Context)
 }
