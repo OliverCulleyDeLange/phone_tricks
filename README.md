@@ -35,8 +35,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 8. **Real-time audio thread still takes `std::mutex mutex` for parameter reads.** Heap allocation has been moved off the audio thread (commit below), but the per-callback parameter mutex is still in place. Convert the simple scalar fields (frequency, amplitude, blend, per-effect wet/dry, filterFrequency, filterWetDry) to `std::atomic<float>` so the audio callback never blocks. The eqBands vector is more involved — it needs an atomic pointer swap or a lock-free SPSC queue.
 
-9. **`MainActivity` requests RECORD_AUDIO but never handles the result.** If the user denies the prompt, the SamplePlayer silently fails when it tries to construct `AudioRecord`. If the user grants the permission after the activity has already started, nothing re-tries. Use `ActivityResultContracts.RequestPermission` and gate the sampler UI on the granted state.
-
 10. **`iOS IOSSamplePlayer.startRecording` does not check microphone permission.** Combined with the missing Info.plist key (#3), the first recording attempt will crash on a real device.
 
 15. **iOS audio session is single-engine but used by two managers.** `IOSAudioManager` and `IOSSamplePlayer` each instantiate their own `AVAudioEngine`. Two engines on iOS contend for the same I/O hardware — at minimum the recorder's `inputNode` install will conflict with the synth's playback engine on some hardware paths.
