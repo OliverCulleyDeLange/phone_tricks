@@ -55,8 +55,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 24. **`EqViewModel.startPolling` runs forever; no `stopPolling` is ever called.** The 50 ms spectrum poll keeps running for the lifetime of the ViewModel even when the EQ sheet is closed. Drive polling from a `LaunchedEffect` keyed on sheet visibility instead.
 
-29. **`FxScreen` filter-preset drag-to-cycle relies on a chord of x and y deltas** (`dragAmount.x - dragAmount.y`). This means a horizontal swipe right and a vertical swipe up both increment — confusing UX and easy to trigger by accident.
-
 ### Suggested improvements
 
 - **Lock-free parameter updates in `SuperpoweredSynth.cpp`.** Replace the per-callback `std::mutex` with `std::atomic<float>` for frequency, amplitude, blend, and per-effect wet/dry mixes. The audio thread should never block.

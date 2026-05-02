@@ -90,7 +90,11 @@ fun FxScreen(fxViewModel: FxViewModel, modifier: Modifier = Modifier) {
                         detectDragGestures(
                             onDragStart = { dragAccum.floatValue = 0f },
                         ) { _, dragAmount ->
-                            dragAccum.floatValue += dragAmount.x - dragAmount.y
+                            // Horizontal drag only — the original code
+                            // averaged x and -y, so a vertical swipe also
+                            // cycled presets and made the gesture easy to
+                            // trigger by accident.
+                            dragAccum.floatValue += dragAmount.x
                             val steps = (dragAccum.floatValue / 80f).toInt()
                             if (steps != 0) {
                                 fxViewModel.cycleFilterPreset(steps)
