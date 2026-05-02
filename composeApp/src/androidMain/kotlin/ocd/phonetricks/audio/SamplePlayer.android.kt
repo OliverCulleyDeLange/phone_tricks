@@ -10,6 +10,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,8 +64,12 @@ class AndroidSamplePlayer : SamplePlayer {
     @SuppressLint("MissingPermission")
     override fun startRecording() {
         stopPlayback()
-        recordJob?.cancel()
+        val previous = recordJob
         recordJob = scope.launch {
+            // Wait for the previous recorder to fully release the mic
+            // before acquiring it again — otherwise AudioRecord
+            // construction can fail with the mic still held.
+            previous?.cancelAndJoin()
             val recorder = AudioRecord(
                 MediaRecorder.AudioSource.MIC,
                 sampleRate, channelConfig, audioFormat, minBufSize * 4
@@ -102,8 +107,9 @@ class AndroidSamplePlayer : SamplePlayer {
     }
 
     private fun startLoop() {
-        playJob?.cancel()
+        val previous = playJob
         playJob = scope.launch {
+            previous?.cancelAndJoin()
             val track = AudioTrack.Builder()
                 .setAudioAttributes(
                     AudioAttributes.Builder()
@@ -168,9 +174,11 @@ class AndroidSamplePlayer : SamplePlayer {
 
     override fun stopPlayback() {
         _isPlaying.value = false
-        playJob?.cancel()
+        val previous = playJob
         playJob = null
-        activeTrack = null
+        // Let the coroutine's finally block release the AudioTrack —
+        // clearing activeTrack here would race with track.write().
+        if (previous != null) scope.launch { previous.cancelAndJoin() }
     }
 
     override fun setLoopSpeed(speed: Float) { loopSpeed = speed.coerceIn(0.1f, 4f) }
