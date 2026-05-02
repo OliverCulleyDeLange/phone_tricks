@@ -33,8 +33,6 @@ The findings below are grouped by severity. Line numbers refer to the file at th
 
 ### Bugs — likely blocks builds or breaks features
 
-2. **iOS sensors collide with each other.** `CMMotionManager` only supports a single device-motion handler at a time, but each of the six iOS flows calls `startDeviceMotionUpdatesToQueue` independently and each `awaitClose` calls `stopDeviceMotionUpdates`. Collecting more than one sensor flow simultaneously (which the app does) means the latest collector wins and any cancellation kills all the others. A single shared device-motion subscription needs to fan out to per-sensor flows.
-
 7. **`SynthesizerViewModel.recompute` is invoked on every sensor sample.** Each accelerometer / gyroscope / rotation-vector emission calls `recompute(...)`, which in turn calls `audioManager.playSynthSound`, `setEffect`, and `setFilter` — each of those takes the C++ audio mutex on the audio thread. At `SENSOR_DELAY_GAME` (~50 Hz × 3 sensors) this is hundreds of mutex acquisitions per second on the real-time audio thread, causing priority inversion and glitches. Throttle, or push parameters into lock-free atomics.
 
 8. **Real-time audio thread takes a `std::mutex` and allocates.** `SuperpoweredSynth.cpp::onAudioProcess` holds `std::mutex mutex` for the whole callback (line 384) and allocates a `std::vector<float>` for the FFT result every FFT_SIZE samples (line 465 / 473). Both are forbidden in real-time audio code. Use `std::atomic` for parameters and a fixed-size double-buffered spectrum array.
