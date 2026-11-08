@@ -9,7 +9,7 @@ import kotlin.math.*
 actual fun createAudioManager(): AudioManager = IOSAudioManager()
 
 class IOSAudioManager : AudioManager {
-    private val audioEngine = AVAudioEngine()
+    private val audioEngine = SharedIosAudioEngine.engine
     private val playerNode = AVAudioPlayerNode()
     private val reverbNode = AVAudioUnitReverb()
     private val delayNode = AVAudioUnitDelay()
@@ -28,6 +28,7 @@ class IOSAudioManager : AudioManager {
 
     private val bufferSize = 2048
     private var phase = 0.0
+    private var released = false
 
     private val echoDelay = (44100 * 0.5).toInt()
     private val echoHistory = FloatArray(echoDelay)
@@ -54,7 +55,7 @@ class IOSAudioManager : AudioManager {
 
     @OptIn(ExperimentalForeignApi::class)
     private fun setupAudioEngine() {
-        configureSharedAudioSession()
+        SharedIosAudioEngine.retain()
         audioEngine.attachNode(playerNode)
         audioEngine.attachNode(reverbNode)
         audioEngine.attachNode(delayNode)
@@ -71,9 +72,6 @@ class IOSAudioManager : AudioManager {
         delayNode.wetDryMix = 0f
         distortionNode.wetDryMix = 0f
 
-        try {
-            audioEngine.startAndReturnError(null)
-        } catch (_: Throwable) {}
     }
 
     override fun playSynthSound(
@@ -92,6 +90,7 @@ class IOSAudioManager : AudioManager {
         isSynthPlaying = true
         tailBuffersRemaining = 0
         if (!isPlaying) {
+            SharedIosAudioEngine.ensureRunning()
             isPlaying = true
             generateAndPlaySound()
         }
@@ -130,10 +129,21 @@ class IOSAudioManager : AudioManager {
     }
 
     override fun release() {
+        if (released) return
+        released = true
         isPlaying = false
         isSynthPlaying = false
+        tailBuffersRemaining = 0
         playerNode.stop()
-        audioEngine.stop()
+        audioEngine.disconnectNodeOutput(playerNode)
+        audioEngine.disconnectNodeOutput(delayNode)
+        audioEngine.disconnectNodeOutput(reverbNode)
+        audioEngine.disconnectNodeOutput(distortionNode)
+        audioEngine.detachNode(playerNode)
+        audioEngine.detachNode(delayNode)
+        audioEngine.detachNode(reverbNode)
+        audioEngine.detachNode(distortionNode)
+        SharedIosAudioEngine.release()
     }
 
     private fun generateSample(waveform: Waveform, phase: Double): Double = when (waveform) {
@@ -178,6 +188,7 @@ class IOSAudioManager : AudioManager {
 
     @OptIn(ExperimentalForeignApi::class)
     private fun generateAndPlaySound() {
+        if (released) return
         val isTail = !isSynthPlaying && tailBuffersRemaining > 0
         if (!isSynthPlaying && tailBuffersRemaining <= 0) {
             isPlaying = false
@@ -260,7 +271,7 @@ class IOSAudioManager : AudioManager {
         }
 
         playerNode.scheduleBuffer(buffer, completionCallbackType = AVAudioPlayerNodeCompletionDataConsumed) {
-            if (this.isSynthPlaying || this.tailBuffersRemaining > 0) this.generateAndPlaySound()
+            if (!this.released && (this.isSynthPlaying || this.tailBuffersRemaining > 0)) this.generateAndPlaySound()
             else {
                 this.isPlaying = false
             }

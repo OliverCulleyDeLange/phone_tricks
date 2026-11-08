@@ -12,8 +12,8 @@ import platform.AVFAudio.setActive
  * - The synth refuses to play while another app holds the audio focus.
  * - Recording fails because the default category is playback-only.
  *
- * Both IOSAudioManager and IOSSamplePlayer must call this before
- * starting their AVAudioEngine. Repeated calls are safe.
+ * SharedIosAudioEngine calls this before either client starts the app's
+ * single AVAudioEngine. Repeated calls are safe.
  */
 @OptIn(ExperimentalForeignApi::class)
 internal fun configureSharedAudioSession() {

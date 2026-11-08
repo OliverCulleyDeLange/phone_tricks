@@ -4,13 +4,9 @@ import kotlin.concurrent.Volatile
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.get
 import kotlinx.cinterop.set
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import platform.AVFAudio.AVAudioEngine
 import platform.AVFAudio.AVAudioFormat
 import platform.AVFAudio.AVAudioPCMBuffer
 import platform.AVFAudio.AVAudioPlayerNode
@@ -23,11 +19,10 @@ actual fun createSamplePlayer(): SamplePlayer = IOSSamplePlayer()
 @OptIn(ExperimentalForeignApi::class)
 class IOSSamplePlayer : SamplePlayer {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val sampleRate = 44100.0
     private val bufferSize = 4096
 
-    private val engine = AVAudioEngine()
+    private val engine = SharedIosAudioEngine.engine
     private val playerNode = AVAudioPlayerNode()
     private val format = AVAudioFormat(standardFormatWithSampleRate = sampleRate, channels = 1u)
 
@@ -65,12 +60,12 @@ class IOSSamplePlayer : SamplePlayer {
     private var endPoint = 1f
 
     private val recordedChunks = mutableListOf<FloatArray>()
+    private var released = false
 
     init {
-        configureSharedAudioSession()
+        SharedIosAudioEngine.retain()
         engine.attachNode(playerNode)
         engine.connect(playerNode, engine.mainMixerNode, format)
-        try { engine.startAndReturnError(null) } catch (_: Throwable) {}
     }
 
     override fun startRecording() {
@@ -81,7 +76,8 @@ class IOSSamplePlayer : SamplePlayer {
         // armed forever.
         _isRecording.value = false
         requestMicrophonePermission { granted ->
-            if (!granted) return@requestMicrophonePermission
+            if (!granted || released) return@requestMicrophonePermission
+            SharedIosAudioEngine.ensureRunning()
             recordedChunks.clear()
             _isRecording.value = true
             val inputNode = engine.inputNode
@@ -115,6 +111,7 @@ class IOSSamplePlayer : SamplePlayer {
     private var scheduledFrames: Long = 0L
 
     private fun scheduleLoop() {
+        SharedIosAudioEngine.ensureRunning()
         _isPlaying.value = true
         scheduledFrames = 0L
         scheduleNextBuffer(isLoopStart = true)
@@ -184,8 +181,16 @@ class IOSSamplePlayer : SamplePlayer {
     }
 
     override fun release() {
+        if (released) return
+        released = true
+        if (_isRecording.value) {
+            _isRecording.value = false
+            engine.inputNode.removeTapOnBus(0u)
+        }
         stopPlayback()
-        engine.stop()
+        engine.disconnectNodeOutput(playerNode)
+        engine.detachNode(playerNode)
+        SharedIosAudioEngine.release()
     }
 
     private fun buildWaveform(samples: FloatArray, bands: Int): FloatArray {
@@ -202,6 +207,3 @@ class IOSSamplePlayer : SamplePlayer {
         return out
     }
 }
-
-
-

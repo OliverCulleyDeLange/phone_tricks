@@ -13,7 +13,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color.Companion.Transparent
-import androidx.compose.ui.input.pointer.consumeAllChanges
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 
@@ -50,7 +49,7 @@ fun TouchPad(
 
                         onTouch(normalizedX, normalizedY)
                         isTouching.value = true
-                        downPointer.consumeAllChanges()
+                        downPointer.consume()
 
                         try {
                             while (true) {
@@ -67,7 +66,7 @@ fun TouchPad(
 
                                 onTouch(normalizedX, normalizedY)
                                 isTouching.value = true
-                                movePointer.consumeAllChanges()
+                                movePointer.consume()
                             }
                         } finally {
                             onUnTouch()
