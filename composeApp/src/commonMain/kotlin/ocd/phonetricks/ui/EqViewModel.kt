@@ -2,11 +2,11 @@ package ocd.phonetricks.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import ocd.phonetricks.audio.AudioManager
 import ocd.phonetricks.audio.EqBand
@@ -30,26 +30,18 @@ class EqViewModel(
     val spectrum: StateFlow<FloatArray> = _spectrum.asStateFlow()
 
     private var nextId = (_bands.value.maxOfOrNull { it.id } ?: 0) + 1
-    private var pollingJob: Job? = null
 
     init {
         applyBands()
-        startPolling()
-    }
-
-    fun startPolling() {
-        if (pollingJob?.isActive == true) return
-        pollingJob = viewModelScope.launch {
-            while (true) {
+        // The spectrum is consumed by both the EQ sheet and the always-visible
+        // debug overlay on MainScreen, so polling runs for the lifetime of
+        // the ViewModel. viewModelScope cancels the loop on onCleared().
+        viewModelScope.launch {
+            while (isActive) {
                 _spectrum.value = audioManager.getSpectrumData()
                 delay(50)
             }
         }
-    }
-
-    fun stopPolling() {
-        pollingJob?.cancel()
-        pollingJob = null
     }
 
     fun addBand(frequency: Float = 1000f, gainDb: Float = 0f) {

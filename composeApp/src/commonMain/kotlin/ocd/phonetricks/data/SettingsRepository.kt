@@ -41,11 +41,23 @@ class SettingsRepository(private val store: SettingsStore) {
 
     fun loadFxState(): FxState {
         val raw = store.read("fx_state") ?: return FxState()
-        return try {
-            json.decodeFromString(raw)
+        val decoded = try {
+            json.decodeFromString<FxState>(raw)
         } catch (_: Exception) {
-            FxState()
+            return FxState()
         }
+        return decoded.copy(effectWetDry = mergeWithDefaults(decoded.effectWetDry))
+    }
+
+    private fun mergeWithDefaults(persisted: Map<AudioEffect, Float>): Map<AudioEffect, Float> {
+        // Persisted state may have been written before new effects were added
+        // to the enum. Re-merge so every entry is present and lookups never
+        // return null.
+        val out = LinkedHashMap<AudioEffect, Float>(AudioEffect.entries.size)
+        for (effect in AudioEffect.entries) {
+            out[effect] = persisted[effect] ?: 0f
+        }
+        return out
     }
 
     fun saveFxState(state: FxState) {

@@ -2,9 +2,9 @@
 #include <android/log.h>
 #include <cmath>
 #include <atomic>
+#include <algorithm>
 #include <mutex>
 #include <cstring>
-#include <vector>
 #include "superpowered/SuperpoweredSimple.h"
 #include "superpowered/SuperpoweredAndroidAudioIO.h"
 
@@ -20,6 +20,12 @@ static const int MAX_DELAY_SAMPLES = 88200;
 
 static const int FFT_SIZE = 2048;
 static const int SPECTRUM_BANDS = 512;
+static const int MAX_EQ_BANDS = 32;
+
+static_assert(std::atomic<float>::is_always_lock_free,
+              "Real-time controls require lock-free float atomics");
+static_assert(std::atomic<int>::is_always_lock_free,
+              "Real-time controls require lock-free int atomics");
 
 static void fft_inplace(float* re, float* im, int n) {
     for (int i = 1, j = 0; i < n; i++) {
@@ -206,9 +212,9 @@ public:
             audioIO(nullptr),
             frequency(440.0f),
             amplitude(0.5f),
+            blend(0.0f),
             waveformA(SINE),
             waveformB(SINE),
-            blend(0.0f),
             playing(false),
             tailFramesRemaining(0),
             phase(0.0f),
@@ -229,65 +235,76 @@ public:
             comb3(1491, 0.84f, 0.2f), comb4(1422, 0.84f, 0.2f),
             whooshPhase(0.0f) {
 
+        for (int i = 0; i < MAX_EQ_BANDS; i++) {
+            eqConfigFrequencies[i].store(1000.0f, std::memory_order_relaxed);
+            eqConfigGainsDb[i].store(0.0f, std::memory_order_relaxed);
+            eqConfigQs[i].store(1.4f, std::memory_order_relaxed);
+        }
+        for (int i = 0; i < SPECTRUM_BANDS; i++) {
+            spectrumPublished[i].store(0.0f, std::memory_order_relaxed);
+        }
+
         audioIO = new SuperpoweredAndroidAudioIO(
                 samplerate, 1024, false, true,
                 audioProcessing, this, -1, -1
         );
         if (audioIO) audioIO->start();
-        biquad.setLowPass(filterFrequency, (float)samplerate);
+        biquad.setLowPass(filterFrequency.load(std::memory_order_relaxed), (float)samplerate);
     }
 
     ~SuperpoweredSynthesizer() { delete audioIO; }
 
     void playSound(float freq, float amp, int wfA, int wfB, float blendFactor) {
-        std::lock_guard<std::mutex> lock(mutex);
-        frequency = freq;
-        amplitude = amp;
-        waveformA = static_cast<WaveformType>(wfA);
-        waveformB = static_cast<WaveformType>(wfB);
-        blend = blendFactor;
-        playing = true;
+        frequency.store(freq, std::memory_order_relaxed);
+        amplitude.store(amp, std::memory_order_relaxed);
+        waveformA.store(wfA, std::memory_order_relaxed);
+        waveformB.store(wfB, std::memory_order_relaxed);
+        blend.store(blendFactor, std::memory_order_relaxed);
+        tailFramesRemaining.store(0, std::memory_order_relaxed);
+        playing.store(true, std::memory_order_release);
     }
 
     void stopSound() {
-        std::lock_guard<std::mutex> lock(mutex);
-        playing = false;
-        tailFramesRemaining = samplerate * 2;
+        tailFramesRemaining.store(
+                currentSampleRate.load(std::memory_order_relaxed) * 2,
+                std::memory_order_relaxed
+        );
+        playing.store(false, std::memory_order_release);
     }
 
     void setEffect(int effectId, float wetDry) {
-        std::lock_guard<std::mutex> lock(mutex);
         switch (effectId) {
-            case FX_ECHO:       echoWetDry = wetDry; break;
-            case FX_DELAY:      delayWetDry = wetDry; break;
-            case FX_BITCRUSHER: bitcrusherWetDry = wetDry; break;
-            case FX_REVERB:     reverbWetDry = wetDry; break;
-            case FX_WHOOSH:     whooshWetDry = wetDry; break;
-            case FX_DISTORTION: distortionWetDry = wetDry; break;
+            case FX_ECHO:       echoWetDry.store(wetDry, std::memory_order_relaxed); break;
+            case FX_DELAY:      delayWetDry.store(wetDry, std::memory_order_relaxed); break;
+            case FX_BITCRUSHER: bitcrusherWetDry.store(wetDry, std::memory_order_relaxed); break;
+            case FX_REVERB:     reverbWetDry.store(wetDry, std::memory_order_relaxed); break;
+            case FX_WHOOSH:     whooshWetDry.store(wetDry, std::memory_order_relaxed); break;
+            case FX_DISTORTION: distortionWetDry.store(wetDry, std::memory_order_relaxed); break;
         }
     }
 
     void setFilter(int presetId, float freq, float wetDry) {
-        std::lock_guard<std::mutex> lock(mutex);
-        filterPreset = static_cast<FilterPresetId>(presetId);
-        filterFrequency = freq;
-        filterWetDry = wetDry;
-        rebuildFilter();
+        filterPreset.store(presetId, std::memory_order_relaxed);
+        filterFrequency.store(freq, std::memory_order_relaxed);
+        filterWetDry.store(wetDry, std::memory_order_relaxed);
     }
 
 private:
     SuperpoweredAndroidAudioIO *audioIO;
-    float frequency, amplitude, blend;
-    WaveformType waveformA, waveformB;
+    std::atomic<float> frequency, amplitude, blend;
+    std::atomic<int> waveformA, waveformB;
     std::atomic<bool> playing;
-    int tailFramesRemaining;
+    std::atomic<int> tailFramesRemaining;
     float phase;
     unsigned int samplerate;
-    std::mutex mutex;
+    std::atomic<int> currentSampleRate { 44100 };
 
-    float echoWetDry, delayWetDry, bitcrusherWetDry, reverbWetDry, whooshWetDry, distortionWetDry;
-    FilterPresetId filterPreset;
-    float filterFrequency, filterWetDry;
+    std::atomic<float> echoWetDry, delayWetDry, bitcrusherWetDry, reverbWetDry, whooshWetDry, distortionWetDry;
+    std::atomic<int> filterPreset;
+    std::atomic<float> filterFrequency, filterWetDry;
+    int appliedFilterPreset = F_LOWPASS;
+    float appliedFilterFrequency = 1000.0f;
+    int appliedSampleRate = 44100;
 
     EchoDelay echoFx;
     EchoDelay delayFx;
@@ -298,47 +315,113 @@ private:
 
     float fftInputBuffer[FFT_SIZE] = {};
     int fftWritePos = 0;
-    std::vector<float> spectrumData;
-    std::mutex spectrumMutex;
+    float fftReScratch[FFT_SIZE] = {};
+    float fftImScratch[FFT_SIZE] = {};
+    std::atomic<float> spectrumPublished[SPECTRUM_BANDS];
 
-    std::vector<EqBandState> eqBands;
+    // EQ configuration is published with a sequence lock. The producer may
+    // briefly take eqWriterMutex, but the audio callback never does: it takes
+    // one best-effort atomic snapshot and keeps its own filter state.
+    std::mutex eqWriterMutex;
+    std::atomic<unsigned int> eqConfigSequence { 0 };
+    std::atomic<int> eqConfigCount { 0 };
+    std::atomic<float> eqConfigFrequencies[MAX_EQ_BANDS];
+    std::atomic<float> eqConfigGainsDb[MAX_EQ_BANDS];
+    std::atomic<float> eqConfigQs[MAX_EQ_BANDS];
+    float pendingEqFrequencies[MAX_EQ_BANDS] = {};
+    float pendingEqGainsDb[MAX_EQ_BANDS] = {};
+    float pendingEqQs[MAX_EQ_BANDS] = {};
+    EqBandState activeEqBands[MAX_EQ_BANDS] = {};
+    int activeEqBandCount = 0;
+    unsigned int appliedEqSequence = 0;
 
-    void rebuildEqBand(EqBandState& band) {
-        band.filter.setParametric(band.frequency, (float)samplerate, band.gainDb, band.q);
+    void rebuildEqBand(EqBandState& band, int sampleRate) {
+        const float nyquistSafeFrequency = std::min(
+                std::max(band.frequency, 10.0f),
+                sampleRate * 0.45f
+        );
+        band.filter.setParametric(
+                nyquistSafeFrequency,
+                (float)sampleRate,
+                band.gainDb,
+                std::max(band.q, 0.01f)
+        );
     }
 
 public:
     void setEqBands(int count, float* frequencies, float* gainsDb, float* qs) {
-        std::lock_guard<std::mutex> lock(mutex);
-        eqBands.resize(count);
-        for (int i = 0; i < count; i++) {
-            eqBands[i].frequency = frequencies[i];
-            eqBands[i].gainDb = gainsDb[i];
-            eqBands[i].q = qs[i];
-            rebuildEqBand(eqBands[i]);
+        std::lock_guard<std::mutex> lock(eqWriterMutex);
+        const int safeCount = std::min(std::max(count, 0), MAX_EQ_BANDS);
+        if (count > MAX_EQ_BANDS) {
+            LOGE("setEqBands: truncating %d bands to real-time limit %d", count, MAX_EQ_BANDS);
         }
+        eqConfigSequence.fetch_add(1, std::memory_order_acq_rel); // odd: write in progress
+        for (int i = 0; i < safeCount; i++) {
+            eqConfigFrequencies[i].store(frequencies[i], std::memory_order_relaxed);
+            eqConfigGainsDb[i].store(gainsDb[i], std::memory_order_relaxed);
+            eqConfigQs[i].store(qs[i], std::memory_order_relaxed);
+        }
+        eqConfigCount.store(safeCount, std::memory_order_relaxed);
+        eqConfigSequence.fetch_add(1, std::memory_order_release); // even: stable snapshot
     }
 
     void getSpectrum(float* out, int size) {
-        std::lock_guard<std::mutex> lock(spectrumMutex);
-        int copy = std::min(size, (int)spectrumData.size());
-        for (int i = 0; i < copy; i++) out[i] = spectrumData[i];
+        int copy = std::min(size, SPECTRUM_BANDS);
+        for (int i = 0; i < copy; i++) {
+            out[i] = spectrumPublished[i].load(std::memory_order_relaxed);
+        }
         for (int i = copy; i < size; i++) out[i] = 0.0f;
     }
 
 private:
 
-    void rebuildFilter() {
-        float sr = (float)samplerate;
-        switch (filterPreset) {
-            case F_LOWPASS:    biquad.setLowPass(filterFrequency, sr); break;
-            case F_HIGHPASS:   biquad.setHighPass(filterFrequency, sr); break;
-            case F_LOWSHELF:   biquad.setLowShelf(filterFrequency, sr); break;
-            case F_HIGHSHELF:  biquad.setHighShelf(filterFrequency, sr); break;
-            case F_BANDPASS:   biquad.setBandPass(filterFrequency, sr); break;
-            case F_NOTCH:      biquad.setNotch(filterFrequency, sr); break;
-            case F_PARAMETRIC: biquad.setParametric(filterFrequency, sr); break;
+    void refreshEqBands(int sampleRate, bool forceRebuild) {
+        const unsigned int before = eqConfigSequence.load(std::memory_order_acquire);
+        if ((before & 1u) != 0u || (!forceRebuild && before == appliedEqSequence)) return;
+
+        const int count = std::min(
+                std::max(eqConfigCount.load(std::memory_order_relaxed), 0),
+                MAX_EQ_BANDS
+        );
+        for (int i = 0; i < count; i++) {
+            pendingEqFrequencies[i] = eqConfigFrequencies[i].load(std::memory_order_relaxed);
+            pendingEqGainsDb[i] = eqConfigGainsDb[i].load(std::memory_order_relaxed);
+            pendingEqQs[i] = eqConfigQs[i].load(std::memory_order_relaxed);
         }
+        const unsigned int after = eqConfigSequence.load(std::memory_order_acquire);
+        if (before != after || (after & 1u) != 0u) return;
+
+        activeEqBandCount = count;
+        for (int i = 0; i < count; i++) {
+            activeEqBands[i].frequency = pendingEqFrequencies[i];
+            activeEqBands[i].gainDb = pendingEqGainsDb[i];
+            activeEqBands[i].q = pendingEqQs[i];
+            rebuildEqBand(activeEqBands[i], sampleRate);
+        }
+        appliedEqSequence = after;
+    }
+
+    void refreshFilter(int sampleRate, bool forceRebuild) {
+        const int preset = filterPreset.load(std::memory_order_relaxed);
+        const float requestedFrequency = filterFrequency.load(std::memory_order_relaxed);
+        if (!forceRebuild && preset == appliedFilterPreset && requestedFrequency == appliedFilterFrequency) return;
+
+        const float safeFrequency = std::min(
+                std::max(requestedFrequency, 10.0f),
+                sampleRate * 0.45f
+        );
+        const float sr = (float)sampleRate;
+        switch (static_cast<FilterPresetId>(preset)) {
+            case F_LOWPASS:    biquad.setLowPass(safeFrequency, sr); break;
+            case F_HIGHPASS:   biquad.setHighPass(safeFrequency, sr); break;
+            case F_LOWSHELF:   biquad.setLowShelf(safeFrequency, sr); break;
+            case F_HIGHSHELF:  biquad.setHighShelf(safeFrequency, sr); break;
+            case F_BANDPASS:   biquad.setBandPass(safeFrequency, sr); break;
+            case F_NOTCH:      biquad.setNotch(safeFrequency, sr); break;
+            case F_PARAMETRIC: biquad.setParametric(safeFrequency, sr); break;
+        }
+        appliedFilterPreset = preset;
+        appliedFilterFrequency = requestedFrequency;
     }
 
     float generateSample(WaveformType wf, float p) {
@@ -381,96 +464,119 @@ private:
     }
 
     bool onAudioProcess(short int *output, int numberOfFrames, int sr) {
-        std::lock_guard<std::mutex> lock(mutex);
+        const int sampleRate = sr > 0 ? sr : 44100;
+        currentSampleRate.store(sampleRate, std::memory_order_relaxed);
+        const bool sampleRateChanged = sampleRate != appliedSampleRate;
+        refreshFilter(sampleRate, sampleRateChanged);
+        refreshEqBands(sampleRate, sampleRateChanged);
+        appliedSampleRate = sampleRate;
 
-        const bool isTail = !playing && tailFramesRemaining > 0;
+        // Take one coherent-enough scalar snapshot per render buffer. These
+        // values are independent controls, so observing adjacent UI updates
+        // in different buffers is harmless and never blocks audio.
+        const bool playingNow = playing.load(std::memory_order_acquire);
+        const float frequencyNow = frequency.load(std::memory_order_relaxed);
+        const float amplitudeNow = amplitude.load(std::memory_order_relaxed);
+        const auto waveformANow = static_cast<WaveformType>(waveformA.load(std::memory_order_relaxed));
+        const auto waveformBNow = static_cast<WaveformType>(waveformB.load(std::memory_order_relaxed));
+        const float blendNow = blend.load(std::memory_order_relaxed);
+        const float echoWetDryNow = echoWetDry.load(std::memory_order_relaxed);
+        const float delayWetDryNow = delayWetDry.load(std::memory_order_relaxed);
+        const float bitcrusherWetDryNow = bitcrusherWetDry.load(std::memory_order_relaxed);
+        const float reverbWetDryNow = reverbWetDry.load(std::memory_order_relaxed);
+        const float whooshWetDryNow = whooshWetDry.load(std::memory_order_relaxed);
+        const float distortionWetDryNow = distortionWetDry.load(std::memory_order_relaxed);
+        const float filterWetDryNow = filterWetDry.load(std::memory_order_relaxed);
+        const int tailFrames = tailFramesRemaining.load(std::memory_order_relaxed);
 
-        if (!playing && tailFramesRemaining <= 0) {
+        const bool isTail = !playingNow && tailFrames > 0;
+
+        if (!playingNow && tailFrames <= 0) {
             memset(output, 0, numberOfFrames * sizeof(short int) * 2);
             return true;
         }
 
         if (isTail) {
-            tailFramesRemaining -= numberOfFrames;
-            if (tailFramesRemaining < 0) tailFramesRemaining = 0;
+            tailFramesRemaining.fetch_sub(numberOfFrames, std::memory_order_relaxed);
         }
 
-        float phaseIncrement = 2.0f * M_PI * frequency / sr;
-        float whooshInc = 2.0f * M_PI * 2.0f / sr;
+        float phaseIncrement = 2.0f * M_PI * frequencyNow / sampleRate;
+        float whooshInc = 2.0f * M_PI * 2.0f / sampleRate;
 
         for (int i = 0; i < numberOfFrames; i++) {
             float dry = 0.0f;
-            if (playing) {
-                float sA = generateSample(waveformA, phase);
-                float sB = generateSample(waveformB, phase);
-                dry = (sA * (1.0f - blend) + sB * blend) * amplitude;
+            if (playingNow) {
+                float sA = generateSample(waveformANow, phase);
+                float sB = generateSample(waveformBNow, phase);
+                dry = (sA * (1.0f - blendNow) + sB * blendNow) * amplitudeNow;
                 phase += phaseIncrement;
                 if (phase >= 2.0f * M_PI) phase -= 2.0f * M_PI;
             }
 
             float sample = dry;
 
-            if (echoWetDry > 0.0f) {
+            if (echoWetDryNow > 0.0f) {
                 float wet = echoFx.process(dry);
-                sample = dry * (1.0f - echoWetDry) + wet * echoWetDry;
+                sample = dry * (1.0f - echoWetDryNow) + wet * echoWetDryNow;
             }
 
-            if (delayWetDry > 0.0f) {
+            if (delayWetDryNow > 0.0f) {
                 float wet = delayFx.process(sample);
-                sample = sample * (1.0f - delayWetDry) + wet * delayWetDry;
+                sample = sample * (1.0f - delayWetDryNow) + wet * delayWetDryNow;
             }
 
-            if (bitcrusherWetDry > 0.0f) {
-                float crushed = applyBitcrusher(sample, bitcrusherWetDry);
-                sample = sample * (1.0f - bitcrusherWetDry) + crushed * bitcrusherWetDry;
+            if (bitcrusherWetDryNow > 0.0f) {
+                float crushed = applyBitcrusher(sample, bitcrusherWetDryNow);
+                sample = sample * (1.0f - bitcrusherWetDryNow) + crushed * bitcrusherWetDryNow;
             }
 
-            if (reverbWetDry > 0.0f) {
+            if (reverbWetDryNow > 0.0f) {
                 float wet = applyReverb(sample);
-                sample = sample * (1.0f - reverbWetDry) + wet * reverbWetDry;
+                sample = sample * (1.0f - reverbWetDryNow) + wet * reverbWetDryNow;
             }
 
-            if (whooshWetDry > 0.0f) {
+            if (whooshWetDryNow > 0.0f) {
                 float mod = 0.5f + 0.5f * sinf(whooshPhase);
                 float wet = sample * mod;
-                sample = sample * (1.0f - whooshWetDry) + wet * whooshWetDry;
+                sample = sample * (1.0f - whooshWetDryNow) + wet * whooshWetDryNow;
                 whooshPhase += whooshInc;
                 if (whooshPhase >= 2.0f * M_PI) whooshPhase -= 2.0f * M_PI;
             }
 
-            if (distortionWetDry > 0.0f) {
-                float drive = 1.0f + distortionWetDry * 20.0f;
+            if (distortionWetDryNow > 0.0f) {
+                float drive = 1.0f + distortionWetDryNow * 20.0f;
                 float distorted = tanhf(sample * drive) / tanhf(drive);
-                sample = sample * (1.0f - distortionWetDry) + distorted * distortionWetDry;
+                sample = sample * (1.0f - distortionWetDryNow) + distorted * distortionWetDryNow;
             }
 
-            if (filterWetDry > 0.0f) {
+            if (filterWetDryNow > 0.0f) {
                 float filtered = biquad.process(sample);
-                sample = sample * (1.0f - filterWetDry) + filtered * filterWetDry;
+                sample = sample * (1.0f - filterWetDryNow) + filtered * filterWetDryNow;
             }
 
-            for (auto& band : eqBands) {
-                sample = band.filter.process(sample);
+            for (int bandIndex = 0; bandIndex < activeEqBandCount; bandIndex++) {
+                sample = activeEqBands[bandIndex].filter.process(sample);
             }
 
             fftInputBuffer[fftWritePos++] = sample;
             if (fftWritePos >= FFT_SIZE) {
                 fftWritePos = 0;
-                float re[FFT_SIZE], im[FFT_SIZE] = {};
+                // Reuse member-scoped scratch buffers — std::vector<float>(SPECTRUM_BANDS)
+                // and large stack arrays (16KB) on the audio thread were the
+                // worst real-time offenders.
                 for (int j = 0; j < FFT_SIZE; j++) {
                     float hann = 0.5f * (1.0f - cosf(2.0f * M_PI * j / (FFT_SIZE - 1)));
-                    re[j] = fftInputBuffer[j] * hann;
+                    fftReScratch[j] = fftInputBuffer[j] * hann;
+                    fftImScratch[j] = 0.0f;
                 }
-                fft_inplace(re, im, FFT_SIZE);
-                std::vector<float> mag(SPECTRUM_BANDS);
+                fft_inplace(fftReScratch, fftImScratch, FFT_SIZE);
                 for (int j = 0; j < SPECTRUM_BANDS; j++) {
-                    float m = sqrtf(re[j]*re[j] + im[j]*im[j]) / FFT_SIZE;
-                    mag[j] = (m > 0.0f) ? (20.0f * log10f(m) + 80.0f) / 80.0f : 0.0f;
-                    if (mag[j] < 0.0f) mag[j] = 0.0f;
-                    if (mag[j] > 1.0f) mag[j] = 1.0f;
+                    float m = sqrtf(fftReScratch[j]*fftReScratch[j] + fftImScratch[j]*fftImScratch[j]) / FFT_SIZE;
+                    float v = (m > 0.0f) ? (20.0f * log10f(m) + 80.0f) / 80.0f : 0.0f;
+                    if (v < 0.0f) v = 0.0f;
+                    if (v > 1.0f) v = 1.0f;
+                    spectrumPublished[j].store(v, std::memory_order_relaxed);
                 }
-                std::lock_guard<std::mutex> slock(spectrumMutex);
-                spectrumData = mag;
             }
 
             short int out = (short int)(fmaxf(-1.0f, fminf(1.0f, sample)) * 32767.0f);
@@ -539,19 +645,25 @@ Java_ocd_phonetricks_audio_AndroidAudioManager_nativeSetEqBands(
         jfloatArray frequencies, jfloatArray gains, jfloatArray qs) {
     auto *synth = reinterpret_cast<SuperpoweredSynthesizer *>(synth_ptr);
     if (!synth) return;
-    int count = env->GetArrayLength(frequencies);
+    const int freqLen = env->GetArrayLength(frequencies);
+    const int gainLen = env->GetArrayLength(gains);
+    const int qLen    = env->GetArrayLength(qs);
+    if (freqLen != gainLen || freqLen != qLen) {
+        // Mismatched arrays would cause out-of-bounds reads on the
+        // shorter of gains/qs. Refuse the update rather than crash
+        // the audio thread.
+        LOGE("nativeSetEqBands: array length mismatch (freq=%d gain=%d q=%d)",
+             freqLen, gainLen, qLen);
+        return;
+    }
     float* freqBuf = env->GetFloatArrayElements(frequencies, nullptr);
     float* gainBuf = env->GetFloatArrayElements(gains, nullptr);
     float* qBuf    = env->GetFloatArrayElements(qs, nullptr);
-    synth->setEqBands(count, freqBuf, gainBuf, qBuf);
+    synth->setEqBands(freqLen, freqBuf, gainBuf, qBuf);
     env->ReleaseFloatArrayElements(frequencies, freqBuf, JNI_ABORT);
     env->ReleaseFloatArrayElements(gains, gainBuf, JNI_ABORT);
     env->ReleaseFloatArrayElements(qs, qBuf, JNI_ABORT);
 }
 
 } // extern "C"
-
-
-
-
 

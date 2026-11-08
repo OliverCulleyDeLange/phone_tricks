@@ -12,4 +12,4 @@ interface SensorManager {
     val gravityFlow: Flow<Gravity>
 }
 
-expect fun createSensorManager(): SensorManager
+expect fun createSensorManager(context: Any?): SensorManager

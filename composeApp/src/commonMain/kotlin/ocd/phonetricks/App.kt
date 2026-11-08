@@ -8,6 +8,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,12 +55,23 @@ fun App(sensorManager: SensorManager, settingsRepository: SettingsRepository) {
     MaterialTheme(colorScheme = AppColorScheme) {
         val sensorViewModel = remember { SensorViewModel(sensorManager) }
         val audioManager = remember { createAudioManager() }
+        val samplePlayer = remember { createSamplePlayer() }
+        // The ViewModels are stored in `remember` rather than a ViewModelStore,
+        // so onCleared() never runs. Tie audio cleanup to the composition's
+        // lifecycle instead — when App leaves composition (activity destroy)
+        // we release the JNI synthesizer and the recorder.
+        DisposableEffect(audioManager, samplePlayer) {
+            onDispose {
+                audioManager.release()
+                samplePlayer.release()
+            }
+        }
         val settingsViewModel = remember { SettingsViewModel(settingsRepository) }
         val noteSettingsViewModel = remember { NoteSettingsViewModel(settingsRepository) }
         val synthesizerViewModel = remember { SynthesizerViewModel(sensorManager, audioManager, settingsViewModel, noteSettingsViewModel) }
         val fxViewModel = remember { FxViewModel(audioManager, settingsRepository) }
         val eqViewModel = remember { EqViewModel(audioManager, settingsRepository) }
-        val sampleViewModel = remember { SampleViewModel(createSamplePlayer()) }
+        val sampleViewModel = remember { SampleViewModel(samplePlayer) }
 
         var showSettings by remember { mutableStateOf(false) }
         var showFx by remember { mutableStateOf(false) }

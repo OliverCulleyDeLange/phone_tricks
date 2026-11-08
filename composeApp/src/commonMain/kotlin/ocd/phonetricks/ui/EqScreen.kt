@@ -37,13 +37,16 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ocd.phonetricks.audio.EqBand
+import ocd.phonetricks.utils.formatOneDecimal
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.log10
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
+import kotlin.time.TimeSource
 
 private const val MIN_FREQ = 20f
 private const val MAX_FREQ = 20000f
@@ -144,7 +147,8 @@ private fun EqCanvas(
 
     var dragTargetId by remember { mutableStateOf<Int?>(null) }
     var lastTapId by remember { mutableStateOf<Int?>(null) }
-    var lastTapTime by remember { mutableStateOf(0L) }
+    var lastTapMark by remember { mutableStateOf<TimeSource.Monotonic.ValueTimeMark?>(null) }
+    val clock = remember { TimeSource.Monotonic }
 
     Box(modifier = modifier) {
         Canvas(
@@ -158,7 +162,7 @@ private fun EqCanvas(
                             if (!press.pressed) continue
 
                             val downPos = press.position
-                            val downTime = System.currentTimeMillis()
+                            val downMark = clock.markNow()
 
                             val hitId = bands.minByOrNull { band ->
                                 val bx = freqToX(band.frequency, size.width.toFloat())
@@ -184,18 +188,21 @@ private fun EqCanvas(
                                     dragging = false
                                     dragTargetId = null
 
-                                    val elapsed = System.currentTimeMillis() - downTime
+                                    val elapsed = downMark.elapsedNow()
                                     val moved = abs(change.position.x - downPos.x) + abs(change.position.y - downPos.y)
-                                    val wasTap = !wasDrag && elapsed < 250L && moved < 20f
+                                    val wasTap = !wasDrag && elapsed.inWholeMilliseconds < 250L && moved < 20f
 
                                     if (wasTap) {
-                                        val now = System.currentTimeMillis()
-                                        if (hitId == lastTapId && now - lastTapTime < 500L) {
+                                        val priorMark = lastTapMark
+                                        val now = clock.markNow()
+                                        if (hitId == lastTapId && priorMark != null &&
+                                            (now - priorMark).inWholeMilliseconds < 500L) {
                                             onBandRemoved(hitId)
                                             lastTapId = null
+                                            lastTapMark = null
                                         } else {
                                             lastTapId = hitId
-                                            lastTapTime = now
+                                            lastTapMark = now
                                         }
                                     }
                                 } else {
@@ -333,8 +340,8 @@ private fun DrawScope.drawBandHandle(band: EqBand, color: Color, textMeasurer: T
     drawCircle(color = color.copy(alpha = 0.25f), radius = 26f, center = Offset(x, y))
     drawCircle(color = color, radius = 8f, center = Offset(x, y))
     drawLine(color.copy(alpha = 0.4f), Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
-    val freqLabel = if (band.frequency >= 1000f) "${"%.1f".format(band.frequency / 1000f)}k" else "${"%.0f".format(band.frequency)}"
-    val gainLabel = "${"%.1f".format(band.gainDb)}dB"
+    val freqLabel = if (band.frequency >= 1000f) "${formatOneDecimal(band.frequency / 1000f)}k" else "${band.frequency.roundToInt()}"
+    val gainLabel = "${formatOneDecimal(band.gainDb)}dB"
     val labelStyle = TextStyle(color = color, fontSize = 9.sp)
     val fl = textMeasurer.measure(freqLabel, labelStyle)
     val gl = textMeasurer.measure(gainLabel, labelStyle)

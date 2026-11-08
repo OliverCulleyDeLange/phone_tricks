@@ -95,11 +95,11 @@ private fun MainScreenContent(
     onTouchPad: (Float, Float) -> Unit,
     onReleasePad: () -> Unit,
     onTare: () -> Unit,
-    onOpenSettings: () -> Unit = {},
-    onOpenFx: () -> Unit = {},
-    onOpenNoteSettings: () -> Unit = {},
-    onOpenEq: () -> Unit = {},
-    onOpenSampler: () -> Unit = {},
+    onOpenSettings: () -> Unit,
+    onOpenFx: () -> Unit,
+    onOpenNoteSettings: () -> Unit,
+    onOpenEq: () -> Unit,
+    onOpenSampler: () -> Unit,
 ) {
     Scaffold { paddingValues ->
         Box(Modifier.fillMaxSize().padding(paddingValues)) {
@@ -227,7 +227,10 @@ fun MainScreenContentPreview() = MaterialTheme {
         onTouchPad = { _, _ -> },
         onReleasePad = {},
         onTare = {},
+        onOpenSettings = {},
+        onOpenFx = {},
         onOpenNoteSettings = {},
         onOpenEq = {},
+        onOpenSampler = {},
     )
 }

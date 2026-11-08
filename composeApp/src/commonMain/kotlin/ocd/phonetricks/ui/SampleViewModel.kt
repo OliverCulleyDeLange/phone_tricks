@@ -19,9 +19,4 @@ class SampleViewModel(private val samplePlayer: SamplePlayer) : ViewModel() {
     fun setLoopSpeed(speed: Float) = samplePlayer.setLoopSpeed(speed)
     fun setStartPoint(normalized: Float) = samplePlayer.setStartPoint(normalized)
     fun setEndPoint(normalized: Float) = samplePlayer.setEndPoint(normalized)
-
-    override fun onCleared() {
-        super.onCleared()
-        samplePlayer.release()
-    }
 }

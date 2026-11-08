@@ -7,7 +7,7 @@ import ocd.phonetricks.data.RotationVector
 /**
  * Platform-specific 3D phone visualization
  * Android: Uses SceneView with Google Filament for 3D rendering
- * iOS: Would use SceneKit or similar
+ * iOS: Uses a lightweight native SceneKit model
  */
 @Composable
 expect fun PhoneVisualization3D(
